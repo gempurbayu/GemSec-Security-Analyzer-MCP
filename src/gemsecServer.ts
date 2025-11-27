@@ -102,7 +102,6 @@ export function createGemSecServer(): Server {
 
   // Verify tools are registered
   // This ensures handlers are properly set up before the server is used
-  console.log("[GemSec] Server created with tools: analyze_file, analyze_directory, get_security_best_practices");
 
   return server;
 }
@@ -172,7 +171,6 @@ function registerListToolsHandler(server: Server) {
       },
     ];
 
-    console.log(`[GemSec] ListTools requested, returning ${tools.length} tools`);
     return { tools };
   });
 }
@@ -293,7 +291,7 @@ async function openInBrowser(filePath: string): Promise<void> {
     }
 
     await execAsync(command);
-    console.log(`✅ Opened report in browser: ${absolutePath}`);
+    console.error(`✅ Opened report in browser: ${absolutePath}`);
   } catch (error) {
     // Silently fail - don't break the flow if browser can't be opened
     // This is non-critical, so we just log a warning
