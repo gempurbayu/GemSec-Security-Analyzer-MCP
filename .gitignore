@@ -4,7 +4,7 @@
 /node_modules
 /.pnp
 .pnp.js
-/package-lock.json
+# /package-lock.json  # Keep package-lock.json for reproducible builds
 
 DEPLOYMENT.md
 NGINX_SETUP.md

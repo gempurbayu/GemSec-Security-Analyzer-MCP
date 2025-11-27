@@ -4,8 +4,16 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
-RUN npm ci --ignore-scripts
+COPY package.json package-lock.json* ./
+
+# Install dependencies
+# Use npm ci if package-lock.json exists, otherwise use npm install
+RUN if [ -f package-lock.json ]; then \
+      npm ci --ignore-scripts; \
+    else \
+      echo "Warning: package-lock.json not found, using npm install"; \
+      npm install --ignore-scripts; \
+    fi
 
 # Copy source files
 COPY tsconfig.json ./
@@ -19,8 +27,16 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Copy package files and install production dependencies only
-COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts
+COPY package.json package-lock.json* ./
+
+# Install production dependencies
+# Use npm ci if package-lock.json exists, otherwise use npm install
+RUN if [ -f package-lock.json ]; then \
+      npm ci --omit=dev --ignore-scripts; \
+    else \
+      echo "Warning: package-lock.json not found, using npm install"; \
+      npm install --omit=dev --ignore-scripts; \
+    fi
 
 # Copy built files
 COPY --from=build /app/build ./build
