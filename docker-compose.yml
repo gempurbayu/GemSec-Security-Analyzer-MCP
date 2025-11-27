@@ -3,7 +3,7 @@ services:
   gemsec:
     image: gemsec-mcp:latest
     command: > 
-      npx tsx proxy.ts https://mcp.gempurbayu.com:443/gemsec-security.analyzer 7070 --allow-http
+      npx tsx proxy.ts https://mcp.gempurbayu.com:443/gemsec-security-analyzer 7070 --allow-http
     networks:
       - proxy-net
     restart: unless-stopped
