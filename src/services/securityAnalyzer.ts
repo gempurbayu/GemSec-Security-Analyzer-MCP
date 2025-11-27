@@ -32,6 +32,7 @@ export class SecurityAnalyzer {
           type: pattern.name,
           line: lineNum,
           code: lineContent,
+          context: this.buildContextSnippet(lines, lineNum),
           message: pattern.message,
           recommendation: pattern.recommendation,
         });
@@ -88,6 +89,19 @@ export class SecurityAnalyzer {
       medium: issues.filter((i) => i.severity === "medium").length,
       low: issues.filter((i) => i.severity === "low").length,
     };
+  }
+
+  private buildContextSnippet(lines: string[], line: number, radius = 2): string {
+    const start = Math.max(0, line - 1 - radius);
+    const end = Math.min(lines.length, line + radius);
+    return lines
+      .slice(start, end)
+      .map((content, idx) => {
+        const currentLine = start + idx + 1;
+        const prefix = currentLine === line ? ">" : " ";
+        return `${prefix} ${currentLine.toString().padStart(4, " ")} | ${content}`;
+      })
+      .join("\n");
   }
 }
 

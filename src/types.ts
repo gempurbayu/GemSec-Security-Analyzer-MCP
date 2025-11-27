@@ -5,6 +5,7 @@ export interface SecurityIssue {
   type: string;
   line: number;
   code: string;
+  context: string;
   message: string;
   recommendation: string;
 }

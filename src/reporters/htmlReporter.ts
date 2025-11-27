@@ -82,8 +82,11 @@ function buildHtmlDocument(
             const issuesHtml =
               sortedIssues.length > 0
                 ? sortedIssues
-                    .map(
-                      (issue) => `
+                    .map((issue) => {
+                      const debugPrompt = buildDebugPrompt(result.file, issue);
+                      const fileLink = buildFileUrl(result.file, issue.line);
+
+                      return `
                   <article class="issue-card severity-${issue.severity}">
                     <header>
                       <span class="severity-tag">${getSeverityIcon(issue.severity)} ${issue.severity.toUpperCase()}</span>
@@ -92,12 +95,21 @@ function buildHtmlDocument(
                     <ul>
                       <li><strong>Line:</strong> ${issue.line}</li>
                       <li><strong>Code:</strong> <code>${escapeHtml(issue.code)}</code></li>
+                      <li><strong>Open:</strong> <a href="${fileLink}">vscode://</a></li>
                     </ul>
+                    <div class="issue-context">
+                      <p class="section-title">Code snippet</p>
+                      <pre><code>${escapeHtml(issue.context)}</code></pre>
+                    </div>
                     <p class="issue-message">⚠️ ${escapeHtml(issue.message)}</p>
                     <p class="issue-recommendation">✅ ${escapeHtml(issue.recommendation)}</p>
+                    <div class="issue-debug">
+                      <p class="section-title">🧠 Debug prompt</p>
+                      <pre>${escapeHtml(debugPrompt)}</pre>
+                    </div>
                   </article>
-                `
-                    )
+                `;
+                    })
                     .join("")
                 : `<p class="no-issues">No security issues detected.</p>`;
 
@@ -332,6 +344,19 @@ main {
   font-size: 0.95rem;
 }
 
+.issue-context,
+.issue-debug {
+  margin: 1rem 0;
+}
+
+.section-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #475569;
+}
+
 code {
   background: #0f172a;
   color: #fff;
@@ -339,6 +364,16 @@ code {
   border-radius: 6px;
   font-family: "JetBrains Mono", "Fira Code", monospace;
   font-size: 0.9rem;
+}
+
+pre {
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 0.75rem;
+  border-radius: 12px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 .issue-message,
@@ -391,5 +426,13 @@ function escapeHtml(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function buildDebugPrompt(file: string, issue: SecurityIssue): string {
+  return `Investigate ${issue.severity.toUpperCase()} issue "${issue.type}" in ${file} line ${issue.line}. Context:\n${issue.context}\nMessage: ${issue.message}\nApply fix: ${issue.recommendation}`;
+}
+
+function buildFileUrl(file: string, line: number): string {
+  return `vscode://file/${encodeURIComponent(file)}:${line}`;
 }
 

@@ -34,7 +34,10 @@ export function formatTextReport(results: AnalysisResult[]): string {
       report += `   Line: ${issue.line}\n`;
       report += `   Code: ${issue.code}\n`;
       report += `   ⚠️  ${issue.message}\n`;
-      report += `   ✅ ${issue.recommendation}\n\n`;
+      report += `   ✅ ${issue.recommendation}\n`;
+      report += `   📄 Context:\n${issue.context}\n`;
+      report += `   🔗 Open: ${buildFileUrl(result.file, issue.line)}\n`;
+      report += `   💡 Debug Prompt: ${buildDebugPrompt(result.file, issue)}\n\n`;
     }
   }
 
@@ -59,5 +62,14 @@ function getSeverityIcon(severity: SecurityIssue["severity"]): string {
     medium: "🟡",
     low: "🟢",
   }[severity];
+}
+
+function buildDebugPrompt(file: string, issue: SecurityIssue): string {
+  return `Investigate ${issue.severity.toUpperCase()} issue "${issue.type}" in ${file} line ${issue.line}. Use the snippet above to add a secure fix that addresses: ${issue.message} and apply: ${issue.recommendation}`;
+}
+
+function buildFileUrl(file: string, line: number): string {
+  const encodedPath = encodeURIComponent(file);
+  return `vscode://file/${encodedPath}:${line}`;
 }
 
