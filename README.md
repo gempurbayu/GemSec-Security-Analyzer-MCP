@@ -166,7 +166,8 @@ If you are using a web-based MCP client that supports SSE, the configuration is 
   "mcpServers": {
     "gemsec-sse": {
       "url": "http://localhost:3030/sse",
-      "transport": "sse"
+      "transport": "sse",
+      "headers" : "Bearer {your_token}"
     }
   }
 }
@@ -219,10 +220,22 @@ The HTTP transport aligns with the Azure-ready blueprint described by Build5Nine
   
   # Expected: {"status":"ok","name":"GemSec","transport":"sse"}
   ```
+- **Authentication (Optional)**
+  - By default, the server runs without authentication (suitable for local development)
+  - To enable token-based authentication, set the `GEMSEC_AUTH_TOKEN` environment variable:
+    ```bash
+    GEMSEC_AUTH_TOKEN=your-secret-token npm start
+    ```
+  - Clients must include the token in requests:
+    - Header: `Authorization: Bearer your-secret-token`
+    - Or query parameter: `?token=your-secret-token`
+  - Note: "No stored tokens found" messages from the client are normal when authentication is disabled
+
 - **Deployment hints**
   - Expose the same port you pass through `$PORT` and ensure your ingress preserves SSE headers.
   - When scaling beyond a single replica (e.g., multiple Azure Container App pods), configure session affinity so `/messages` requests reach the pod that owns the `/sse` stream.
   - The included `Dockerfile` already produces a minimal Node 20 runtime suitable for ACA or other container targets.
+  - For production deployments, consider enabling authentication via `GEMSEC_AUTH_TOKEN`.
 
 ## Output Anatomy
 
@@ -234,6 +247,20 @@ Each finding contains:
 - **Recommendation** – Suggested remediation.
 - **Debug Prompt** – Plain-text instruction suitable for AI pair programming or issue tracking.
 - **VS Code Deep Link** – `vscode://file/<path>:<line>` to jump directly into the file.
+
+### Auto-Open Browser
+
+When an HTML report is generated, it will automatically open in your default browser. This feature works on:
+- **macOS**: Uses `open` command
+- **Windows**: Uses `start` command
+- **Linux**: Uses `xdg-open` command
+
+To disable auto-open, set the environment variable:
+```bash
+GEMSEC_NO_AUTO_OPEN=true npm start
+```
+
+If auto-open fails (e.g., no browser available), the report path will still be shown in the response, and you can open it manually.
 
 ## Troubleshooting
 

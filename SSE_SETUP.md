@@ -207,6 +207,7 @@ docker run -p 3030:3030 gemsec-mcp
 ### Environment Variables
 
 - `PORT` - Port for HTTP server (default: 3030)
+- `GEMSEC_AUTH_TOKEN` - Optional authentication token. If set, all requests must include this token via `Authorization: Bearer <token>` header or `?token=<token>` query parameter. If not set, server runs without authentication (default: disabled)
 
 ### Production Considerations
 
@@ -283,8 +284,34 @@ This is a common issue when SSE connection is not established correctly.
 - Ensure sessionId is taken from response headers when connecting to `/sse`
 - Check server logs for available sessions
 
-### Tools not appearing / need to re-enable
-If tools don't appear when you enable the server, or you need to re-enable multiple times:
+### "No stored tokens found" message
+This is a **normal informational message** from the MCP client, **not an error**. 
+
+**What it means:**
+- The MCP client is checking for stored authentication tokens in its local storage
+- This is part of the client's normal connection flow
+- If your server doesn't require authentication (default), this message can be **safely ignored**
+
+**When to enable authentication:**
+- For local development: Authentication is **not required** (default behavior)
+- For production/remote deployments: Consider enabling authentication for security
+
+**How to enable authentication (optional):**
+1. Set the `GEMSEC_AUTH_TOKEN` environment variable:
+   ```bash
+   GEMSEC_AUTH_TOKEN=your-secret-token npm start
+   ```
+
+2. Clients must include the token in requests:
+   - **Header**: `Authorization: Bearer your-secret-token`
+   - **Query parameter**: `?token=your-secret-token`
+
+3. Server will log: `[GemSec] Authentication enabled (token required)`
+
+**Note:** Even with authentication enabled, the "No stored tokens found" message may still appear initially as the client checks for tokens. This is normal behavior.
+
+### Tools not appearing / "No tools, prompts, or resources"
+If tools don't appear when you enable the server, or you see "No tools, prompts, or resources":
 
 **Recent improvements:**
 - Connection timeout protection (10s for connection, 30s for messages)
@@ -295,8 +322,11 @@ If tools don't appear when you enable the server, or you need to re-enable multi
 **Troubleshooting steps:**
 1. **Check server logs** for initialization messages:
    ```
-   GemSec server initialized with tools: analyze_file, analyze_directory, get_security_best_practices
-   SSE session established: <sessionId>
+   [GemSec] Server created with tools: analyze_file, analyze_directory, get_security_best_practices
+   [GemSec] Connecting server to transport...
+   [GemSec] Server connected to transport successfully
+   [GemSec] Streamable HTTP session initialized: <sessionId>
+   [GemSec] ListTools requested, returning 3 tools
    ```
 
 2. **Verify server is running**:
@@ -307,13 +337,22 @@ If tools don't appear when you enable the server, or you need to re-enable multi
 
 3. **Check for connection errors** in server logs - any errors during connection setup will be logged.
 
-4. **Restart the server** if issues persist:
+4. **Verify endpoint configuration**:
+   - For Streamable HTTP (recommended): Use `http://localhost:3030/mcp` with `type: "streamable-http"`
+   - For legacy SSE: Use `http://localhost:3030/sse` with `transport: "sse"`
+
+5. **Restart the server** if issues persist:
    ```bash
    npm run build
    npm start
    ```
 
-5. **Clear and reconnect** - Disable the MCP server in your IDE, wait a few seconds, then re-enable it.
+6. **Clear and reconnect** - Disable the MCP server in your IDE, wait a few seconds, then re-enable it.
+
+7. **Check session management**:
+   - Ensure session ID is being passed correctly in headers (`mcp-session-id`)
+   - Verify that session is stored after initialization
+   - Check server logs for "Session initialized" messages
 
 **If problems persist:**
 - Check that the server process is not being killed or restarted

@@ -9,6 +9,9 @@ import { createGemSecServer, TOOL_NAME } from "./gemsecServer.js";
 const PORT = Number(process.env.PORT ?? 3030);
 const transports = new Map<string, StreamableHTTPServerTransport>();
 
+// Optional authentication token (set via GEMSEC_AUTH_TOKEN env var)
+const AUTH_TOKEN = process.env.GEMSEC_AUTH_TOKEN;
+
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
@@ -16,12 +19,44 @@ app.use(express.json({ limit: "1mb" }));
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Cache-Control");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Cache-Control, Authorization");
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
   }
   next();
 });
+
+// Optional authentication middleware
+if (AUTH_TOKEN) {
+  app.use((req, res, next) => {
+    // Skip auth for health check
+    if (req.path === "/healthz") {
+      return next();
+    }
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") 
+      ? authHeader.substring(7) 
+      : req.query.token as string | undefined;
+
+    if (!token || token !== AUTH_TOKEN) {
+      res.status(401).json({
+        jsonrpc: "2.0",
+        error: {
+          code: -32001,
+          message: "Unauthorized: Invalid or missing authentication token"
+        },
+        id: null
+      });
+      return;
+    }
+
+    next();
+  });
+  console.log(`[GemSec] Authentication enabled (token required)`);
+} else {
+  console.log(`[GemSec] Authentication disabled (no token required)`);
+}
 
 app.get("/healthz", (_req, res) => {
   // Verify server can be created (quick health check)
@@ -32,6 +67,7 @@ app.get("/healthz", (_req, res) => {
       name: TOOL_NAME,
       transport: "streamable-http",
       activeSessions: transports.size,
+      authentication: AUTH_TOKEN ? "enabled" : "disabled",
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -95,7 +131,13 @@ async function handleMCPRequest(req: express.Request, res: express.Response) {
         }
         return;
       }
-    } else if (!sessionId && (req.method === "GET" || (req.method === "POST" && isInitializeRequest(req.body)))) {
+      // Handle request with existing transport
+      console.log(`[GemSec] Handling ${req.method} request for existing session: ${sessionId}`);
+      const parsedBody = req.method === "POST" ? req.body : undefined;
+      await transport.handleRequest(req, res, parsedBody);
+      return;
+    } else if (!sessionId && req.method === "POST" && isInitializeRequest(req.body)) {
+      // New session initialization - only for POST with initialize request
       // New session - create transport and server
       const server = createGemSecServer();
       
@@ -132,20 +174,67 @@ async function handleMCPRequest(req: express.Request, res: express.Response) {
       };
 
       // Connect server to transport before handling request
+      console.log(`[GemSec] Connecting server to transport...`);
       const connectPromise = server.connect(transport);
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error("Connection timeout")), 10000);
       });
 
       await Promise.race([connectPromise, timeoutPromise]);
+      console.log(`[GemSec] Server connected to transport successfully`);
       
       // Small delay to ensure initialization is complete
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Handle the request immediately after connecting (for initialization)
-      const parsedBody = req.method === "POST" ? req.body : undefined;
-      await transport.handleRequest(req, res, parsedBody);
+      // Handle the initialization request immediately after connecting
+      console.log(`[GemSec] Handling POST initialize request for new session`);
+      await transport.handleRequest(req, res, req.body);
       return; // Already handled
+    } else if (!sessionId && req.method === "GET") {
+      // GET request without session ID - this is for initial SSE connection
+      // StreamableHTTPServerTransport will handle this and create session
+      // But we need to create server and transport first
+      const server = createGemSecServer();
+      
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (sid) => {
+          console.log(`[GemSec] Streamable HTTP session initialized: ${sid}`);
+          if (transport) {
+            transports.set(sid, transport);
+          }
+        },
+        onsessionclosed: (sid) => {
+          console.log(`[GemSec] Streamable HTTP session closed: ${sid}`);
+          transports.delete(sid);
+        },
+      });
+
+      transport.onclose = () => {
+        const sid = transport?.sessionId;
+        if (sid && transports.has(sid)) {
+          console.log(`[GemSec] Transport closed for session ${sid}`);
+          transports.delete(sid);
+        }
+      };
+
+      transport.onerror = (error) => {
+        const sid = transport?.sessionId;
+        console.error(`[GemSec] Transport error for session ${sid}:`, error);
+        if (sid) {
+          transports.delete(sid);
+        }
+      };
+
+      // Connect server to transport
+      console.log(`[GemSec] Connecting server to transport for GET request...`);
+      await server.connect(transport);
+      console.log(`[GemSec] Server connected to transport successfully`);
+      
+      // Handle GET request (SSE stream)
+      console.log(`[GemSec] Handling GET request for SSE stream`);
+      await transport.handleRequest(req, res);
+      return;
     } else if (sessionId && !transports.has(sessionId)) {
       // Session ID provided but not found
       if (!res.headersSent) {
@@ -174,24 +263,6 @@ async function handleMCPRequest(req: express.Request, res: express.Response) {
       }
       return;
     }
-
-    // Handle the request with existing transport
-    if (!transport) {
-      if (!res.headersSent) {
-        res.status(500).json({
-          jsonrpc: "2.0",
-          error: {
-            code: -32603,
-            message: "Internal server error: Failed to retrieve transport"
-          },
-          id: null
-        });
-      }
-      return;
-    }
-
-    const parsedBody = req.method === "POST" ? req.body : undefined;
-    await transport.handleRequest(req, res, parsedBody);
   } catch (error) {
     console.error("Error handling MCP request:", error);
     

@@ -2,6 +2,8 @@
 
 import * as fs from "fs/promises";
 import * as path from "path";
+import { exec } from "child_process";
+import { promisify } from "util";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
@@ -11,6 +13,8 @@ import { SecurityAnalyzer } from "./services/securityAnalyzer.js";
 import { formatTextReport } from "./reporters/textReporter.js";
 import { generateHtmlReport } from "./reporters/htmlReporter.js";
 import { AnalysisResult } from "./types.js";
+
+const execAsync = promisify(exec);
 
 export const TOOL_NAME = "GemSec";
 const BEST_PRACTICES = `
@@ -98,57 +102,56 @@ export function createGemSecServer(): Server {
 
   // Verify tools are registered
   // This ensures handlers are properly set up before the server is used
-  if (process.env.NODE_ENV !== "production") {
-    console.log("GemSec server initialized with tools: analyze_file, analyze_directory, get_security_best_practices");
-  }
+  console.log("[GemSec] Server created with tools: analyze_file, analyze_directory, get_security_best_practices");
 
   return server;
 }
 
 function registerListToolsHandler(server: Server) {
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return {
-      tools: [
-        {
-          name: "analyze_file",
-          description:
-            "Analyze a single file for security vulnerabilities in NextJS/React TypeScript code",
-          inputSchema: {
-            type: "object",
-            properties: {
-              file_path: {
-                type: "string",
-                description: "Path to the file to analyze",
-              },
+    const tools = [
+      {
+        name: "analyze_file",
+        description:
+          "Analyze a single file for security vulnerabilities in NextJS/React TypeScript code",
+        inputSchema: {
+          type: "object",
+          properties: {
+            file_path: {
+              type: "string",
+              description: "Path to the file to analyze",
             },
-            required: ["file_path"],
           },
+          required: ["file_path"],
         },
-        {
-          name: "analyze_directory",
-          description:
-            "Recursively analyze all TypeScript/JavaScript files in a directory for security issues",
-          inputSchema: {
-            type: "object",
-            properties: {
-              directory_path: {
-                type: "string",
-                description: "Path to the directory to analyze",
-              },
+      },
+      {
+        name: "analyze_directory",
+        description:
+          "Recursively analyze all TypeScript/JavaScript files in a directory for security issues",
+        inputSchema: {
+          type: "object",
+          properties: {
+            directory_path: {
+              type: "string",
+              description: "Path to the directory to analyze",
             },
-            required: ["directory_path"],
           },
+          required: ["directory_path"],
         },
-        {
-          name: "get_security_best_practices",
-          description: "Get security best practices for NextJS/React applications",
-          inputSchema: {
-            type: "object",
-            properties: {},
-          },
+      },
+      {
+        name: "get_security_best_practices",
+        description: "Get security best practices for NextJS/React applications",
+        inputSchema: {
+          type: "object",
+          properties: {},
         },
-      ],
-    };
+      },
+    ];
+
+    console.log(`[GemSec] ListTools requested, returning ${tools.length} tools`);
+    return { tools };
   });
 }
 
@@ -216,14 +219,56 @@ async function buildAnalysisResponse(
     outputRoot,
   });
 
+  // Automatically open HTML report in default browser
+  await openInBrowser(htmlPath);
+
   return {
     content: [
       {
         type: "text",
-        text: `${report}\n🌐 HTML preview generated at: ${htmlPath}`,
+        text: `${report}\n🌐 HTML preview generated at: ${htmlPath}\n✅ Report opened in browser automatically`,
       },
     ],
   };
+}
+
+async function openInBrowser(filePath: string): Promise<void> {
+  try {
+    // Check if auto-open is disabled via environment variable
+    if (process.env.GEMSEC_NO_AUTO_OPEN === "true") {
+      return;
+    }
+
+    const platform = process.platform;
+    let command: string;
+
+    // Use absolute path and escape properly
+    const absolutePath = path.resolve(filePath);
+
+    switch (platform) {
+      case "darwin": // macOS
+        command = `open "${absolutePath}"`;
+        break;
+      case "win32": // Windows
+        // Windows requires different escaping
+        command = `start "" "${absolutePath.replace(/"/g, '\\"')}"`;
+        break;
+      case "linux": // Linux
+        command = `xdg-open "${absolutePath}"`;
+        break;
+      default:
+        console.warn(`Unsupported platform for auto-open: ${platform}`);
+        return;
+    }
+
+    await execAsync(command);
+    console.log(`✅ Opened report in browser: ${absolutePath}`);
+  } catch (error) {
+    // Silently fail - don't break the flow if browser can't be opened
+    // This is non-critical, so we just log a warning
+    console.warn(`⚠️  Failed to open browser automatically: ${error instanceof Error ? error.message : String(error)}`);
+    console.warn(`   You can manually open: ${path.resolve(filePath)}`);
+  }
 }
 
 async function resolveProjectRoot(targetPath: string): Promise<string> {
