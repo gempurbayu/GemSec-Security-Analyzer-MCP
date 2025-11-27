@@ -26,19 +26,6 @@ That's it! No cloning, no building, no manual setup. Just install and use.
   - Styled HTML report (`reports/security-report-*/index.html`) generated inside the root of the analyzed project.
 - **Best Practices Helper** – Quick reference guide for hardened Next.js/React deployments.
 
-### Development Setup
-
-If you want to contribute or modify the code:
-
-```bash
-git clone https://github.com/your-org/gemsec-mcp.git
-cd gemsec-mcp
-npm install
-npm run build
-```
-
-GemSec is exposed via the `gemsec-mcp` binary. After installation, you can use it directly in your MCP client configuration.
-
 ## Available MCP Tools
 
 | Tool Name | Description | Arguments |

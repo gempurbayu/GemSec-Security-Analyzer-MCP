@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Released]
 
+## [Unreleased]
+
+### Changed
+- Updated repository URL in package.json to point to the correct GitHub repository
+
 ## [1.2.0] - 2025-01-27
 
 ### Fixed
@@ -48,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Exposed server information
   - Missing security headers
 
-[Unreleased]: https://github.com/your-username/security-analyzer-mcp/compare/v1.2.0...HEAD
-[1.2.0]: https://github.com/your-username/security-analyzer-mcp/compare/v1.1.0...v1.2.0
-[1.1.0]: https://github.com/your-username/security-analyzer-mcp/releases/tag/v1.1.0
+[Unreleased]: https://github.com/gempurbayu/GemSec-Security-Analyzer/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/gempurbayu/GemSec-Security-Analyzer/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/gempurbayu/GemSec-Security-Analyzer/releases/tag/v1.1.0
 
