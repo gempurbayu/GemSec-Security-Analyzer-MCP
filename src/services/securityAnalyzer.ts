@@ -45,6 +45,137 @@ export class SecurityAnalyzer {
     }
   }
 
+  /**
+   * Check if a position is inside a regex literal
+   * Regex literals have format /pattern/flags
+   */
+  private isInsideRegexLiteral(content: string, position: number): boolean {
+    // Look backwards from position to find regex boundaries
+    let i = position - 1;
+    let foundClosingSlash = false;
+    let closingSlashPos = -1;
+    
+    // First, find the closing / of regex (should be after position or at position)
+    // Look forward a bit too in case we're in the middle
+    for (let j = Math.max(0, position - 50); j < Math.min(content.length, position + 20); j++) {
+      if (content[j] === "/" && j >= position) {
+        // Check if followed by regex flags or end of expression
+        const nextChar = content[j + 1];
+        if (!nextChar || /[\s,;)\]}:=]/.test(nextChar) || /[gimsuvy]/.test(nextChar)) {
+          closingSlashPos = j;
+          foundClosingSlash = true;
+          break;
+        }
+      }
+    }
+    
+    if (!foundClosingSlash) return false;
+    
+    // Now look backwards from closing slash to find opening /
+    i = Math.min(position, closingSlashPos) - 1;
+    while (i >= 0 && i >= position - 200) { // Limit search to reasonable distance
+      const char = content[i];
+      const prevChar = i > 0 ? content[i - 1] : "";
+      
+      if (char === "/") {
+        // Not a comment start
+        if (prevChar !== "/" && prevChar !== "*") {
+          // Check if preceded by something that suggests regex (not division)
+          const beforeChar = i > 1 ? content[i - 2] : "";
+          if (
+            i === 0 ||
+            /[\s=:(\[{,;]/.test(prevChar) ||
+            (prevChar && !/[a-zA-Z0-9_\)\]\}]/.test(prevChar))
+          ) {
+            // Found opening slash, check if position is between opening and closing
+            return i < position && closingSlashPos >= position;
+          }
+        }
+      }
+      i--;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Check if a position in the code is inside a string literal or comment
+   */
+  private isInsideStringOrComment(content: string, position: number): boolean {
+    let i = 0;
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let inTemplateLiteral = false;
+    let inSingleLineComment = false;
+    let inMultiLineComment = false;
+    let escapeNext = false;
+
+    while (i < position && i < content.length) {
+      const char = content[i];
+      const nextChar = content[i + 1];
+
+      if (escapeNext) {
+        escapeNext = false;
+        i++;
+        continue;
+      }
+
+      // Handle escape sequences
+      if (char === "\\") {
+        escapeNext = true;
+        i++;
+        continue;
+      }
+
+      // Handle single-line comments
+      if (!inSingleQuote && !inDoubleQuote && !inTemplateLiteral && !inMultiLineComment) {
+        if (char === "/" && nextChar === "/") {
+          inSingleLineComment = true;
+          i += 2;
+          continue;
+        }
+        if (char === "/" && nextChar === "*") {
+          inMultiLineComment = true;
+          i += 2;
+          continue;
+        }
+      }
+
+      // Handle multi-line comment end
+      if (inMultiLineComment && char === "*" && nextChar === "/") {
+        inMultiLineComment = false;
+        i += 2;
+        continue;
+      }
+
+      // Handle newline (end single-line comment)
+      if (inSingleLineComment && char === "\n") {
+        inSingleLineComment = false;
+      }
+
+      // Handle string literals
+      if (!inSingleLineComment && !inMultiLineComment) {
+        if (char === "'" && !inDoubleQuote && !inTemplateLiteral) {
+          inSingleQuote = !inSingleQuote;
+        } else if (char === '"' && !inSingleQuote && !inTemplateLiteral) {
+          inDoubleQuote = !inDoubleQuote;
+        } else if (char === "`" && !inSingleQuote && !inDoubleQuote) {
+          inTemplateLiteral = !inTemplateLiteral;
+        }
+      }
+
+      i++;
+    }
+
+    return (
+      inSingleQuote ||
+      inDoubleQuote ||
+      inTemplateLiteral ||
+      inSingleLineComment ||
+      inMultiLineComment
+    );
+  }
+
   async analyzeFile(filePath: string, fileContent?: string): Promise<AnalysisResult> {
     let content: string;
     let actualFilePath: string = filePath;
@@ -67,6 +198,19 @@ export class SecurityAnalyzer {
 
       for (const match of matches) {
         if (match.index === undefined) continue;
+
+        // Skip if match is inside string literal, comment, or regex literal
+        // Check both start and end of match to be safe
+        const matchStart = match.index;
+        const matchEnd = matchStart + (match[0]?.length ?? 0);
+        
+        if (
+          this.isInsideStringOrComment(content, matchStart) ||
+          this.isInsideStringOrComment(content, matchEnd - 1) ||
+          this.isInsideRegexLiteral(content, matchStart)
+        ) {
+          continue;
+        }
 
         const lineNum = content.substring(0, match.index).split("\n").length;
         const lineContent = lines[lineNum - 1]?.trim() ?? "";
