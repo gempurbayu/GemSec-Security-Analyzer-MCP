@@ -13,12 +13,12 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY --from=build /app/package*.json ./
-RUN npm install --omit=dev
+RUN npm install --omit=dev --ignore-scripts
 
 COPY --from=build /app/build ./build
 COPY --from=build /app/src ./src
 
-RUN npm install -g mcp-remote@latest
+RUN npm install -g mcp-remote@latest --ignore-scripts
 
 CMD ["node", "./build/index.js"]
 
