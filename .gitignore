@@ -8,6 +8,8 @@
 
 DEPLOYMENT.md
 NGINX_SETUP.md
+setup-ssl.sh
+TROUBLESHOOTING.md
 
 nginx.conf
 
