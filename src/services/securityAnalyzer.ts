@@ -18,41 +18,28 @@ export class SecurityAnalyzer {
    * For relative paths, tries to resolve from project root.
    */
   private async resolveFilePath(filePath: string): Promise<string> {
-    // If already absolute, return as is
     if (path.isAbsolute(filePath)) {
       return filePath;
     }
 
-    // Try to find project root from current working directory
-    const projectRoot = await this.findProjectRoot(process.cwd());
-    
-    // Resolve relative path from project root
-    return path.resolve(projectRoot, filePath);
-  }
-
-  /**
-   * Find project root by looking for markers like package.json, .git, etc.
-   */
-  private async findProjectRoot(startDir: string): Promise<string> {
-    let current = path.resolve(startDir);
+    // Find project root by looking for markers
+    let current = path.resolve(process.cwd());
+    const markers = ["package.json", "pnpm-workspace.yaml", "yarn.lock", ".git", "tsconfig.json"];
 
     while (true) {
-      // Check for project markers
-      const markers = ["package.json", "pnpm-workspace.yaml", "yarn.lock", ".git", "tsconfig.json"];
       for (const marker of markers) {
         try {
           await fs.access(path.join(current, marker));
-          return current;
+          return path.resolve(current, filePath);
         } catch {
           // Continue checking other markers
         }
       }
 
-      // Move up one directory
       const parent = path.dirname(current);
       if (parent === current) {
-        // Reached filesystem root, return current working directory as fallback
-        return process.cwd();
+        // Reached filesystem root, use cwd as fallback
+        return path.resolve(process.cwd(), filePath);
       }
       current = parent;
     }
@@ -65,42 +52,11 @@ export class SecurityAnalyzer {
     // If file content is provided, use it directly (for remote MCP servers)
     if (fileContent !== undefined) {
       content = fileContent;
-      actualFilePath = filePath; // Keep original path for reporting
     } else {
-      // Resolve path to absolute path (from project root if relative)
+      // Resolve path and read from filesystem
       const resolvedPath = await this.resolveFilePath(filePath);
-      
-      // Otherwise, try to read from filesystem
-      try {
-        await fs.access(resolvedPath);
-        actualFilePath = resolvedPath;
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const isENOENT = errorMessage.includes("ENOENT") || errorMessage.includes("no such file");
-        
-        if (isENOENT) {
-          throw new Error(
-            `File not found: ${filePath}\n` +
-            `Resolved path: ${resolvedPath}\n` +
-            `Current working directory: ${process.cwd()}\n\n` +
-            `The file does not exist at the specified path. Please check:\n` +
-            `1. The file path is correct (relative to current working directory)\n` +
-            `2. The file exists in your project\n` +
-            `3. If using a remote MCP server, provide 'file_content' parameter instead\n\n` +
-            `Example with file_content (for remote servers):\n` +
-            `{\n` +
-            `  "file_path": "/path/to/file.tsx",\n` +
-            `  "file_content": "// file content here..."\n` +
-            `}`
-          );
-        }
-        
-        throw new Error(
-          `Error accessing file ${resolvedPath}: ${errorMessage}`
-        );
-      }
-
       content = await fs.readFile(resolvedPath, "utf-8");
+      actualFilePath = resolvedPath;
     }
 
     const lines = content.split("\n");
@@ -135,13 +91,6 @@ export class SecurityAnalyzer {
   }
 
   /**
-   * Analyze file content directly (for remote MCP servers)
-   */
-  analyzeFileContent(filePath: string, fileContent: string): Promise<AnalysisResult> {
-    return this.analyzeFile(filePath, fileContent);
-  }
-
-  /**
    * Analyze multiple files from their content (for remote MCP servers)
    */
   async analyzeFilesFromContent(
@@ -150,13 +99,12 @@ export class SecurityAnalyzer {
     const results: AnalysisResult[] = [];
 
     for (const file of files) {
-      // Only analyze TypeScript/JavaScript files
       if (!this.shouldAnalyzeFile(file.path)) {
         continue;
       }
 
       try {
-        const result = await this.analyzeFileContent(file.path, file.content);
+        const result = await this.analyzeFile(file.path, file.content);
         if (result.issues.length > 0) {
           results.push(result);
         }
@@ -177,46 +125,12 @@ export class SecurityAnalyzer {
       return this.analyzeFilesFromContent(files);
     }
 
-    // Resolve path to absolute path (from project root if relative)
+    // Resolve path and verify it's a directory
     const resolvedPath = await this.resolveFilePath(dirPath);
-
-    // Otherwise, try to read from filesystem
-    try {
-      const stats = await fs.stat(resolvedPath);
-      if (!stats.isDirectory()) {
-        throw new Error(`Path is not a directory: ${dirPath}`);
-      }
-    } catch (error) {
-      if (error instanceof Error && error.message.includes("not a directory")) {
-        throw error;
-      }
-      
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const isENOENT = errorMessage.includes("ENOENT") || errorMessage.includes("no such file");
-      
-      if (isENOENT) {
-        throw new Error(
-          `Directory not found: ${dirPath}\n` +
-          `Resolved path: ${resolvedPath}\n` +
-          `Current working directory: ${process.cwd()}\n\n` +
-          `The directory does not exist at the specified path. Please check:\n` +
-          `1. The directory path is correct (relative to current working directory)\n` +
-          `2. The directory exists in your project\n` +
-          `3. If using a remote MCP server, provide 'files' parameter instead\n\n` +
-          `Example with files parameter (for remote servers):\n` +
-          `{\n` +
-          `  "directory_path": "/path/to/dir",\n` +
-          `  "files": [\n` +
-          `    { "path": "/path/to/file1.tsx", "content": "// content..." },\n` +
-          `    { "path": "/path/to/file2.ts", "content": "// content..." }\n` +
-          `  ]\n` +
-          `}`
-        );
-      }
-      
-      throw new Error(
-        `Error accessing directory ${resolvedPath}: ${errorMessage}`
-      );
+    const stats = await fs.stat(resolvedPath);
+    
+    if (!stats.isDirectory()) {
+      throw new Error(`Path is not a directory: ${dirPath}`);
     }
 
     const results: AnalysisResult[] = [];

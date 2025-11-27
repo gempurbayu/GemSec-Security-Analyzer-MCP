@@ -69,7 +69,9 @@ function buildDebugPrompt(file: string, issue: SecurityIssue): string {
 }
 
 function buildFileUrl(file: string, line: number): string {
-  const encodedPath = encodeURIComponent(file);
+  // Only encode characters that need encoding (spaces, special chars)
+  // but keep the path readable
+  const encodedPath = file.replace(/ /g, "%20").replace(/#/g, "%23");
   return `vscode://file/${encodedPath}:${line}`;
 }
 

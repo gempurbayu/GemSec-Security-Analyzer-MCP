@@ -186,7 +186,7 @@ function registerCallToolHandler(server: McpServer, analyzer: SecurityAnalyzer) 
         const fileContent = fileArgs.file_content;
         
         const result = await analyzer.analyzeFile(filePath, fileContent);
-        const projectRoot = await resolveProjectRoot(filePath);
+        const projectRoot = await resolveProjectRoot(fileArgs.file_path);
         return buildAnalysisResponse([result], projectRoot);
       }
 
@@ -199,7 +199,7 @@ function registerCallToolHandler(server: McpServer, analyzer: SecurityAnalyzer) 
         const files = dirArgs.files;
         
         const results = await analyzer.analyzeDirectory(dirPath, files);
-        const projectRoot = await resolveProjectRoot(dirPath);
+        const projectRoot = await resolveProjectRoot(dirArgs.directory_path);
         return buildAnalysisResponse(results, projectRoot);
       }
 
