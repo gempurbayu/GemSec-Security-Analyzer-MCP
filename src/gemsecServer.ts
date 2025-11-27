@@ -4,7 +4,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -81,8 +81,8 @@ const BEST_PRACTICES = `
     - Proper environment variables handling
 `;
 
-export function createGemSecServer(): Server {
-  const server = new Server(
+export function createGemSecServer(): McpServer {
+  const server = new McpServer(
     {
       name: "gemsec",
       version: "1.0.0",
@@ -106,8 +106,8 @@ export function createGemSecServer(): Server {
   return server;
 }
 
-function registerListToolsHandler(server: Server) {
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
+function registerListToolsHandler(server: McpServer) {
+  server.server.setRequestHandler(ListToolsRequestSchema, async () => {
     const tools = [
       {
         name: "analyze_file",
@@ -175,8 +175,8 @@ function registerListToolsHandler(server: Server) {
   });
 }
 
-function registerCallToolHandler(server: Server, analyzer: SecurityAnalyzer) {
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+function registerCallToolHandler(server: McpServer, analyzer: SecurityAnalyzer) {
+  server.server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     try {

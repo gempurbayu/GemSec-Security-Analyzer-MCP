@@ -13,6 +13,51 @@ export class SecurityAnalyzer {
 
   constructor(private readonly patterns: SecurityPattern[] = securityPatterns) {}
 
+  /**
+   * Resolve a file path, handling both absolute and relative paths.
+   * For relative paths, tries to resolve from project root.
+   */
+  private async resolveFilePath(filePath: string): Promise<string> {
+    // If already absolute, return as is
+    if (path.isAbsolute(filePath)) {
+      return filePath;
+    }
+
+    // Try to find project root from current working directory
+    const projectRoot = await this.findProjectRoot(process.cwd());
+    
+    // Resolve relative path from project root
+    return path.resolve(projectRoot, filePath);
+  }
+
+  /**
+   * Find project root by looking for markers like package.json, .git, etc.
+   */
+  private async findProjectRoot(startDir: string): Promise<string> {
+    let current = path.resolve(startDir);
+
+    while (true) {
+      // Check for project markers
+      const markers = ["package.json", "pnpm-workspace.yaml", "yarn.lock", ".git", "tsconfig.json"];
+      for (const marker of markers) {
+        try {
+          await fs.access(path.join(current, marker));
+          return current;
+        } catch {
+          // Continue checking other markers
+        }
+      }
+
+      // Move up one directory
+      const parent = path.dirname(current);
+      if (parent === current) {
+        // Reached filesystem root, return current working directory as fallback
+        return process.cwd();
+      }
+      current = parent;
+    }
+  }
+
   async analyzeFile(filePath: string, fileContent?: string): Promise<AnalysisResult> {
     let content: string;
     let actualFilePath: string = filePath;
@@ -22,28 +67,40 @@ export class SecurityAnalyzer {
       content = fileContent;
       actualFilePath = filePath; // Keep original path for reporting
     } else {
+      // Resolve path to absolute path (from project root if relative)
+      const resolvedPath = await this.resolveFilePath(filePath);
+      
       // Otherwise, try to read from filesystem
       try {
-        await fs.access(filePath);
+        await fs.access(resolvedPath);
+        actualFilePath = resolvedPath;
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const isENOENT = errorMessage.includes("ENOENT") || errorMessage.includes("no such file");
+        
+        if (isENOENT) {
+          throw new Error(
+            `File not found: ${filePath}\n` +
+            `Resolved path: ${resolvedPath}\n` +
+            `Current working directory: ${process.cwd()}\n\n` +
+            `The file does not exist at the specified path. Please check:\n` +
+            `1. The file path is correct (relative to current working directory)\n` +
+            `2. The file exists in your project\n` +
+            `3. If using a remote MCP server, provide 'file_content' parameter instead\n\n` +
+            `Example with file_content (for remote servers):\n` +
+            `{\n` +
+            `  "file_path": "/path/to/file.tsx",\n` +
+            `  "file_content": "// file content here..."\n` +
+            `}`
+          );
+        }
+        
         throw new Error(
-          `File not found: ${filePath}\n\n` +
-          `⚠️  REMOTE MCP SERVER DETECTED\n` +
-          `When using a remote MCP server (cloud), the server cannot access files on your local filesystem.\n\n` +
-          `Solutions:\n` +
-          `1. Use a local MCP server (StdIO transport) for local file analysis\n` +
-          `2. Provide file content directly using the 'file_content' parameter\n` +
-          `3. Ensure the files are accessible on the remote server's filesystem\n\n` +
-          `Example with file_content:\n` +
-          `{\n` +
-          `  "file_path": "/path/to/file.tsx",\n` +
-          `  "file_content": "// file content here..."\n` +
-          `}\n\n` +
-          `Original error: ${error instanceof Error ? error.message : String(error)}`
+          `Error accessing file ${resolvedPath}: ${errorMessage}`
         );
       }
 
-      content = await fs.readFile(filePath, "utf-8");
+      content = await fs.readFile(resolvedPath, "utf-8");
     }
 
     const lines = content.split("\n");
@@ -120,9 +177,12 @@ export class SecurityAnalyzer {
       return this.analyzeFilesFromContent(files);
     }
 
+    // Resolve path to absolute path (from project root if relative)
+    const resolvedPath = await this.resolveFilePath(dirPath);
+
     // Otherwise, try to read from filesystem
     try {
-      const stats = await fs.stat(dirPath);
+      const stats = await fs.stat(resolvedPath);
       if (!stats.isDirectory()) {
         throw new Error(`Path is not a directory: ${dirPath}`);
       }
@@ -130,23 +190,32 @@ export class SecurityAnalyzer {
       if (error instanceof Error && error.message.includes("not a directory")) {
         throw error;
       }
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isENOENT = errorMessage.includes("ENOENT") || errorMessage.includes("no such file");
+      
+      if (isENOENT) {
+        throw new Error(
+          `Directory not found: ${dirPath}\n` +
+          `Resolved path: ${resolvedPath}\n` +
+          `Current working directory: ${process.cwd()}\n\n` +
+          `The directory does not exist at the specified path. Please check:\n` +
+          `1. The directory path is correct (relative to current working directory)\n` +
+          `2. The directory exists in your project\n` +
+          `3. If using a remote MCP server, provide 'files' parameter instead\n\n` +
+          `Example with files parameter (for remote servers):\n` +
+          `{\n` +
+          `  "directory_path": "/path/to/dir",\n` +
+          `  "files": [\n` +
+          `    { "path": "/path/to/file1.tsx", "content": "// content..." },\n` +
+          `    { "path": "/path/to/file2.ts", "content": "// content..." }\n` +
+          `  ]\n` +
+          `}`
+        );
+      }
+      
       throw new Error(
-        `Directory not found: ${dirPath}\n\n` +
-        `⚠️  REMOTE MCP SERVER DETECTED\n` +
-        `When using a remote MCP server (cloud), the server cannot access directories on your local filesystem.\n\n` +
-        `Solutions:\n` +
-        `1. Use a local MCP server (StdIO transport) for local directory analysis\n` +
-        `2. Provide files directly using the 'files' parameter (array of {path, content})\n` +
-        `3. Ensure the directory is accessible on the remote server's filesystem\n\n` +
-        `Example with files parameter:\n` +
-        `{\n` +
-        `  "directory_path": "/path/to/dir",\n` +
-        `  "files": [\n` +
-        `    { "path": "/path/to/file1.tsx", "content": "// content..." },\n` +
-        `    { "path": "/path/to/file2.ts", "content": "// content..." }\n` +
-        `  ]\n` +
-        `}\n\n` +
-        `Original error: ${error instanceof Error ? error.message : String(error)}`
+        `Error accessing directory ${resolvedPath}: ${errorMessage}`
       );
     }
 
@@ -177,7 +246,7 @@ export class SecurityAnalyzer {
       }
     };
 
-    await scan(dirPath);
+    await scan(resolvedPath);
     return results;
   }
 
