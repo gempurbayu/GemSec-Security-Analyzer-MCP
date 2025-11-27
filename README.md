@@ -33,9 +33,15 @@ GemSec is exposed via the `gemsec` binary defined in `package.json`. After build
 ### Typical Workflow
 
 1. **Start the MCP server**
-   ```bash
-   node ./build/index.js
-   ```
+   - **StdIO/CLI**
+     ```bash
+     node ./build/index.js
+     ```
+   - **Express + SSE backend**
+     ```bash
+     npm start
+     # or: PORT=4000 node ./build/httpServer.js
+     ```
 2. **Call `analyze_directory`**
    ```json
    {
@@ -51,26 +57,117 @@ GemSec is exposed via the `gemsec` binary defined in `package.json`. After build
 
 GemSec is an MCP server, so any MCP-aware IDE (such as Cursor) can invoke it directly.
 
+### Setup with StdIO (Recommended for Cursor)
+
 1. **Register the server in Cursor**
    - Open `Settings → Features → MCP Servers`.
-   - Add a new custom server with:
-     - **Name:** `gemsec`
-     - **Command:** `node`
-     - **Args:** `["/absolute/path/to/gemsec-mcp/build/index.js"]`
+   - Add a new custom server with the following configuration:
+     ```json
+     {
+       "mcpServers": {
+         "gemsec": {
+           "command": "node",
+           "args": ["/absolute/path/to/security-analyzer-mcp/build/index.js"]
+         }
+       }
+     }
+     ```
+   - **Name:** `gemsec`
+   - **Command:** `node`
+   - **Args:** `["/absolute/path/to/security-analyzer-mcp/build/index.js"]`
    - Save; restart Cursor if prompted.
 
 2. **Prompting the assistant**
-   - Mention GemSec or the tool you want, e.g. “Run GemSec `analyze_directory` on `src/features/log-activity`” or “Use GemSec to analyze `FormAddNewUser.tsx`.”
+   - Mention GemSec or the tool you want, e.g. "Run GemSec `analyze_directory` on `src/features/log-activity`" or "Use GemSec to analyze `FormAddNewUser.tsx`."
    - Cursor will surface the GemSec tools (`analyze_file`, `analyze_directory`, `get_security_best_practices`) in the tool picker.
 
 3. **Handling results**
    - The response includes a Markdown summary plus the HTML path. Open the `index.html` inside your project (e.g. `…/reports/security-report-*/index.html`).
    - Use the VS Code `vscode://file/...` links embedded in the text or HTML report to jump straight to the relevant lines.
 
+### Setup with SSE (Server-Sent Events)
+
+To use SSE transport, you need to run the HTTP server first, then connect from the client using HTTP endpoints.
+
+#### 1. Running HTTP Server
+
+```bash
+# Build the project first
+npm run build
+
+# Run HTTP server (default port 3030)
+npm start
+
+# Or with a custom port
+PORT=8080 npm start
+```
+
+Server will run at `http://localhost:3030` (or the port you specify).
+
+#### 2. Verify Server is Running
+
+```bash
+# Test health endpoint
+curl http://localhost:3030/healthz
+
+# Response:
+# {
+#   "status": "ok",
+#   "name": "GemSec",
+#   "transport": "sse"
+# }
+```
+
+#### 3. Connect with SSE Client
+
+SSE transport uses two endpoints:
+- **GET `/sse`** - Opens SSE stream (server → client)
+- **POST `/messages?sessionId=<id>`** - Sends message to server (client → server)
+
+**Example using curl for testing:**
+
+```bash
+# 1. Open SSE connection (will get sessionId from response headers)
+curl -N http://localhost:3030/sse
+
+# 2. In another terminal, send message (replace <sessionId> with ID from step 1)
+curl -X POST http://localhost:3030/messages?sessionId=<sessionId> \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list",
+    "params": {}
+  }'
+```
+
+#### 4. Configuration for Web-based MCP Clients
+
+If you are using a web-based MCP client that supports SSE, the configuration is usually like this:
+
+```json
+{
+  "mcpServers": {
+    "gemsec-sse": {
+      "url": "http://localhost:3030/sse",
+      "transport": "sse"
+    }
+  }
+}
+```
+
+**Note:** Cursor currently works better with StdIO transport. SSE transport is more suitable for:
+- Web-based MCP clients
+- Remote deployments (Azure, Docker, etc.)
+- Integration with HTTP-based tools
+- Multi-client scenarios
+
 ## Development Guide
 
 - **Source Layout**
-  - `src/index.ts` – MCP server bootstrap (registers tools, handles routing, resolves project roots).
+  - `src/gemsecServer.ts` – MCP server bootstrap (registers tools, handles routing, resolves project roots).
+  - `src/index.ts` – StdIO entry point for CLI-oriented MCP clients.
+  - `src/httpServer.ts` – Express + SSE transport so HTTP clients can connect over `/sse` and `/messages`.
   - `src/services/securityAnalyzer.ts` – Core scanner; reads files and applies regex-based rules defined in `src/config/securityPatterns.ts`.
   - `src/reporters/*.ts` – Text and HTML reporting pipelines.
   - `src/types.ts` – Shared interfaces (`SecurityIssue`, `SecurityPattern`, etc.).
@@ -81,7 +178,34 @@ GemSec is an MCP server, so any MCP-aware IDE (such as Cursor) can invoke it dir
   - Add new entries to `securityPatterns.ts`.
   - Each pattern requires a name, regex, severity, message, and recommendation.
 - **Adding Tools**
-  - Update `registerListToolsHandler` + `registerCallToolHandler` in `src/index.ts`.
+  - Update `registerListToolsHandler` + `registerCallToolHandler` in `src/gemsecServer.ts`.
+
+## Express + SSE Backend
+
+The HTTP transport aligns with the Azure-ready blueprint described by Build5Nines for deploying TypeScript-based MCP servers with Express, Docker, and Azure Developer CLI [[source]](https://build5nines.com/how-to-build-and-deploy-an-mcp-server-with-typescript-and-azure-developer-cli-azd-using-azure-container-apps-and-docker/).
+
+> 📖 **Complete SSE setup documentation**: See [SSE_SETUP.md](./SSE_SETUP.md) for detailed guide.
+
+- **Endpoints**
+  - `GET /sse` – Establishes a Server-Sent Events stream (server → client) via `SSEServerTransport`.
+  - `POST /messages?sessionId=<id>` – Handles client → server payloads for the active SSE session.
+  - `GET /healthz` – Lightweight readiness probe that reports tool name and transport type.
+- **Running locally**
+  ```bash
+  npm start            # defaults to port 3030
+  PORT=8080 npm start  # override the port
+  ```
+- **Quick Test**
+  ```bash
+  # Test health endpoint
+  curl http://localhost:3030/healthz
+  
+  # Expected: {"status":"ok","name":"GemSec","transport":"sse"}
+  ```
+- **Deployment hints**
+  - Expose the same port you pass through `$PORT` and ensure your ingress preserves SSE headers.
+  - When scaling beyond a single replica (e.g., multiple Azure Container App pods), configure session affinity so `/messages` requests reach the pod that owns the `/sse` stream.
+  - The included `Dockerfile` already produces a minimal Node 20 runtime suitable for ACA or other container targets.
 
 ## Output Anatomy
 
