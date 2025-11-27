@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 
 import express from "express";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
+import { randomUUID } from "crypto";
 import { createGemSecServer, TOOL_NAME } from "./gemsecServer.js";
 
 const PORT = Number(process.env.PORT ?? 3030);
-const sseTransports = new Map<string, SSEServerTransport>();
+const transports = new Map<string, StreamableHTTPServerTransport>();
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
-// CORS middleware untuk development (optional)
+// CORS middleware for development (optional)
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -28,8 +30,8 @@ app.get("/healthz", (_req, res) => {
     res.json({
       status: "ok",
       name: TOOL_NAME,
-      transport: "sse",
-      activeSessions: sseTransports.size,
+      transport: "streamable-http",
+      activeSessions: transports.size,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -41,141 +43,176 @@ app.get("/healthz", (_req, res) => {
   }
 });
 
+// Streamable HTTP: Single endpoint that handles both GET (SSE stream) and POST (requests)
+// This is the modern standard according to MCP spec
+app.get("/mcp", async (req, res) => {
+  await handleMCPRequest(req, res);
+});
+
+app.post("/mcp", async (req, res) => {
+  await handleMCPRequest(req, res);
+});
+
+// Backward compatibility: Also support legacy SSE endpoints
+// GET /sse for SSE stream (legacy)
 app.get("/sse", async (req, res) => {
-  // Set proper SSE headers
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no"); // Disable nginx buffering
-
-  let transport: SSEServerTransport | null = null;
-  let server: ReturnType<typeof createGemSecServer> | null = null;
-
-  try {
-    // Create transport first
-    transport = new SSEServerTransport("/messages", res);
-    const sessionId = transport.sessionId;
-    
-    // Create server instance for this session
-    server = createGemSecServer();
-    
-    // Store transport before connecting to avoid race conditions
-    sseTransports.set(sessionId, transport);
-
-    // Handle client disconnect
-    const cleanup = () => {
-      if (transport) {
-        console.log(`SSE connection closed for session ${sessionId}`);
-        try {
-          transport.close();
-        } catch (e) {
-          console.error(`Error closing transport for session ${sessionId}:`, e);
-        }
-        sseTransports.delete(sessionId);
-      }
-    };
-
-    req.on("close", cleanup);
-    req.on("error", (error) => {
-      console.error(`SSE connection error for session ${sessionId}:`, error);
-      cleanup();
-    });
-
-    // Connect server to transport with timeout
-    const connectPromise = server.connect(transport);
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("Connection timeout")), 10000);
-    });
-
-    await Promise.race([connectPromise, timeoutPromise]);
-    
-    console.log(`SSE session established: ${sessionId}`);
-    
-    // Verify tools are registered by checking server capabilities
-    // This ensures tools are available before client tries to list them
-    if (server) {
-      // Force a small delay to ensure initialization is complete
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-  } catch (error) {
-    const sessionId = transport?.sessionId || "unknown";
-    console.error(`Failed to establish SSE session ${sessionId}:`, error);
-    
-    // Cleanup on error
-    if (transport) {
-      try {
-        transport.close();
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-      sseTransports.delete(sessionId);
-    }
-    
-    if (!res.headersSent) {
-      res.status(500).json({ 
-        error: "Failed to establish SSE session",
-        details: error instanceof Error ? error.message : String(error)
-      });
-    }
-  }
+  await handleMCPRequest(req, res);
 });
 
+// POST /sse for requests (legacy - some clients may POST here)
+app.post("/sse", async (req, res) => {
+  await handleMCPRequest(req, res);
+});
+
+// POST /messages for requests (legacy SSE pattern)
 app.post("/messages", async (req, res) => {
-  const sessionId = req.query.sessionId as string;
-  
-  if (!sessionId || typeof sessionId !== "string" || sessionId.length === 0) {
-    res.status(400).json({ error: "Missing sessionId query parameter" });
-    return;
-  }
+  await handleMCPRequest(req, res);
+});
 
-  const transport = sseTransports.get(sessionId);
-  if (!transport) {
-    console.warn(`Unknown SSE session: ${sessionId}. Available sessions:`, Array.from(sseTransports.keys()));
-    res.status(404).json({ 
-      error: "Unknown SSE session",
-      sessionId,
-      availableSessions: Array.from(sseTransports.keys()),
-      hint: "The session may have expired. Try reconnecting to /sse endpoint."
-    });
-    return;
-  }
-
+async function handleMCPRequest(req: express.Request, res: express.Response) {
   try {
-    // Add timeout for message processing
-    const messagePromise = transport.handlePostMessage(req, res, req.body);
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("Message processing timeout")), 30000);
-    });
-
-    await Promise.race([messagePromise, timeoutPromise]);
-  } catch (error) {
-    console.error(`Failed to process message for session ${sessionId}:`, error);
+    // Extract session ID from headers (preferred) or query parameter
+    const sessionId = 
+      (req.headers["mcp-session-id"] as string | undefined) ||
+      (req.query.sessionId as string | undefined);
     
-    // If it's a timeout or connection error, clean up the session
-    if (error instanceof Error && (
-      error.message.includes("timeout") || 
-      error.message.includes("ECONNRESET") ||
-      error.message.includes("closed")
-    )) {
-      console.warn(`Cleaning up session ${sessionId} due to error`);
-      try {
-        transport.close();
-      } catch (e) {
-        // Ignore cleanup errors
+    let transport: StreamableHTTPServerTransport | undefined;
+
+    // Check if we have an existing transport for this session
+    if (sessionId && transports.has(sessionId)) {
+      // Existing session - reuse transport
+      transport = transports.get(sessionId);
+      if (!transport) {
+        if (!res.headersSent) {
+          res.status(404).json({
+            jsonrpc: "2.0",
+            error: {
+              code: -32001,
+              message: "Session not found"
+            },
+            id: null
+          });
+        }
+        return;
       }
-      sseTransports.delete(sessionId);
+    } else if (!sessionId && (req.method === "GET" || (req.method === "POST" && isInitializeRequest(req.body)))) {
+      // New session - create transport and server
+      const server = createGemSecServer();
+      
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (sid) => {
+          console.log(`Streamable HTTP session initialized: ${sid}`);
+          // Store transport when session is initialized to avoid race conditions
+          if (transport) {
+            transports.set(sid, transport);
+          }
+        },
+        onsessionclosed: (sid) => {
+          console.log(`Streamable HTTP session closed: ${sid}`);
+          transports.delete(sid);
+        },
+      });
+
+      // Set up cleanup handlers
+      transport.onclose = () => {
+        const sid = transport?.sessionId;
+        if (sid && transports.has(sid)) {
+          console.log(`Transport closed for session ${sid}`);
+          transports.delete(sid);
+        }
+      };
+
+      transport.onerror = (error) => {
+        const sid = transport?.sessionId;
+        console.error(`Transport error for session ${sid}:`, error);
+        if (sid) {
+          transports.delete(sid);
+        }
+      };
+
+      // Connect server to transport before handling request
+      const connectPromise = server.connect(transport);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Connection timeout")), 10000);
+      });
+
+      await Promise.race([connectPromise, timeoutPromise]);
+      
+      // Small delay to ensure initialization is complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Handle the request immediately after connecting (for initialization)
+      const parsedBody = req.method === "POST" ? req.body : undefined;
+      await transport.handleRequest(req, res, parsedBody);
+      return; // Already handled
+    } else if (sessionId && !transports.has(sessionId)) {
+      // Session ID provided but not found
+      if (!res.headersSent) {
+        res.status(404).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32001,
+            message: "Session not found",
+            data: { sessionId, availableSessions: Array.from(transports.keys()) }
+          },
+          id: null
+        });
+      }
+      return;
+    } else {
+      // Invalid request - no session ID and not an initialization request
+      if (!res.headersSent) {
+        res.status(400).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32000,
+            message: "Bad Request: No valid session ID provided and request is not an initialization"
+          },
+          id: null
+        });
+      }
+      return;
     }
+
+    // Handle the request with existing transport
+    if (!transport) {
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32603,
+            message: "Internal server error: Failed to retrieve transport"
+          },
+          id: null
+        });
+      }
+      return;
+    }
+
+    const parsedBody = req.method === "POST" ? req.body : undefined;
+    await transport.handleRequest(req, res, parsedBody);
+  } catch (error) {
+    console.error("Error handling MCP request:", error);
     
     if (!res.headersSent) {
-      res.status(500).json({ 
-        error: "Failed to process message",
-        details: error instanceof Error ? error.message : String(error)
+      res.status(500).json({
+        jsonrpc: "2.0",
+        error: {
+          code: -32603,
+          message: "Internal server error",
+          data: error instanceof Error ? error.message : String(error)
+        },
+        id: null
       });
     }
   }
-});
+}
+
 
 app.listen(PORT, () => {
-  console.log(`${TOOL_NAME} MCP SSE server listening on port ${PORT}`);
+  console.log(`${TOOL_NAME} MCP Streamable HTTP server listening on port ${PORT}`);
+  console.log(`Primary endpoint: GET/POST /mcp (Streamable HTTP standard)`);
+  console.log(`Legacy endpoints: GET/POST /sse, POST /messages (for backward compatibility)`);
 });
 

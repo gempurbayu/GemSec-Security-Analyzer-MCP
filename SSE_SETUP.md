@@ -48,21 +48,24 @@ Expected response:
 
 ## Endpoints
 
-### GET `/sse`
-Opens SSE stream connection. Client will receive:
-- Session ID through response headers
-- Event stream for server → client communication
+### GET/POST `/mcp` (Primary - Streamable HTTP Standard)
+Modern Streamable HTTP endpoint that handles both:
+- **GET**: Opens SSE stream connection (server → client)
+- **POST**: Sends requests to server (client → server)
 
-**Headers sent:**
-- `Content-Type: text/event-stream`
-- `Cache-Control: no-cache`
-- `Connection: keep-alive`
+**Session Management:**
+- Session ID is provided via `mcp-session-id` header or `sessionId` query parameter
+- For new sessions, session ID is generated automatically and returned in response headers
 
-### POST `/messages?sessionId=<id>`
-Sends message to server for a specific session.
+### GET/POST `/sse` (Legacy - Backward Compatibility)
+Legacy SSE endpoint for backward compatibility:
+- **GET**: Opens SSE stream connection
+- **POST**: Sends requests (some legacy clients POST here)
 
-**Query Parameters:**
-- `sessionId` (required) - Session ID from SSE connection
+### POST `/messages` (Legacy - Backward Compatibility)
+Legacy message endpoint for backward compatibility:
+- Sends message to server for a specific session
+- Session ID via query parameter: `?sessionId=<id>`
 
 **Request Body:**
 JSON-RPC 2.0 format:
@@ -82,34 +85,56 @@ Health check endpoint for monitoring.
 
 ### Using curl (Manual Test)
 
-**Terminal 1 - Open SSE connection:**
-```bash
-curl -N -H "Accept: text/event-stream" http://localhost:3030/sse
-```
+**Using Streamable HTTP (Recommended):**
 
-You will see output like:
-```
-data: {"jsonrpc":"2.0","id":null,"method":"initialize","params":{...}}
-```
-
-**Terminal 2 - Send message (replace SESSION_ID):**
+**Terminal 1 - Initialize session (POST to /mcp):**
 ```bash
-# List tools
-curl -X POST "http://localhost:3030/messages?sessionId=SESSION_ID" \
+curl -X POST http://localhost:3030/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2024-11-05",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "test-client",
+        "version": "1.0.0"
+      }
+    }
+  }'
+```
+
+Response will include `mcp-session-id` header. Use this for subsequent requests.
+
+**Terminal 2 - Open SSE stream (GET to /mcp with session ID):**
+```bash
+curl -N -H "Accept: text/event-stream" \
+  -H "mcp-session-id: YOUR_SESSION_ID" \
+  http://localhost:3030/mcp
+```
+
+**Terminal 3 - Send requests (POST to /mcp with session ID):**
+```bash
+# List tools
+curl -X POST "http://localhost:3030/mcp" \
+  -H "Content-Type: application/json" \
+  -H "mcp-session-id: YOUR_SESSION_ID" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
     "method": "tools/list",
     "params": {}
   }'
 
 # Call tool
-curl -X POST "http://localhost:3030/messages?sessionId=SESSION_ID" \
+curl -X POST "http://localhost:3030/mcp" \
   -H "Content-Type: application/json" \
+  -H "mcp-session-id: YOUR_SESSION_ID" \
   -d '{
     "jsonrpc": "2.0",
-    "id": 2,
+    "id": 3,
     "method": "tools/call",
     "params": {
       "name": "get_security_best_practices",
@@ -118,12 +143,46 @@ curl -X POST "http://localhost:3030/messages?sessionId=SESSION_ID" \
   }'
 ```
 
+**Using Legacy SSE Endpoints (Backward Compatibility):**
+
+**Terminal 1 - Open SSE connection:**
+```bash
+curl -N -H "Accept: text/event-stream" http://localhost:3030/sse
+```
+
+**Terminal 2 - Send message (replace SESSION_ID):**
+```bash
+curl -X POST "http://localhost:3030/messages?sessionId=SESSION_ID" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list",
+    "params": {}
+  }'
+```
+
 ### Using JavaScript/TypeScript Client
 
 ```typescript
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 
+// Using Streamable HTTP (Recommended)
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+
 async function connectToGemSec() {
+  const transport = new StreamableHTTPClientTransport(
+    new URL("http://localhost:3030/mcp")
+  );
+  
+  // Connect and use transport to communicate with server
+  // ... implement client logic
+}
+
+// Using Legacy SSE (Backward Compatibility)
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+
+async function connectToGemSecLegacy() {
   const transport = new SSEClientTransport(
     new URL("http://localhost:3030/sse")
   );

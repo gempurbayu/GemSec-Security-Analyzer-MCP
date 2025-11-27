@@ -118,11 +118,15 @@ curl http://localhost:3030/healthz
 # }
 ```
 
-#### 3. Connect with SSE Client
+#### 3. Connect with Streamable HTTP Client
 
-SSE transport uses two endpoints:
-- **GET `/sse`** - Opens SSE stream (server → client)
-- **POST `/messages?sessionId=<id>`** - Sends message to server (client → server)
+Streamable HTTP transport uses a single endpoint that handles both GET and POST:
+- **GET/POST `/mcp`** - Primary endpoint (modern standard)
+  - GET: Opens SSE stream (server → client)
+  - POST: Sends requests to server (client → server)
+- **Legacy endpoints** (for backward compatibility):
+  - GET/POST `/sse` - Legacy SSE endpoint
+  - POST `/messages` - Legacy message endpoint
 
 **Example using curl for testing:**
 
@@ -145,6 +149,18 @@ curl -X POST http://localhost:3030/messages?sessionId=<sessionId> \
 
 If you are using a web-based MCP client that supports SSE, the configuration is usually like this:
 
+```json
+{
+  "mcpServers": {
+    "gemsec-streamable": {
+      "type": "streamable-http",
+      "url": "http://localhost:3030/mcp"
+    }
+  }
+}
+```
+
+**For legacy SSE clients:**
 ```json
 {
   "mcpServers": {
@@ -187,8 +203,9 @@ The HTTP transport aligns with the Azure-ready blueprint described by Build5Nine
 > 📖 **Complete SSE setup documentation**: See [SSE_SETUP.md](./SSE_SETUP.md) for detailed guide.
 
 - **Endpoints**
-  - `GET /sse` – Establishes a Server-Sent Events stream (server → client) via `SSEServerTransport`.
-  - `POST /messages?sessionId=<id>` – Handles client → server payloads for the active SSE session.
+  - `GET/POST /mcp` – Primary Streamable HTTP endpoint (modern standard). Handles both SSE streams (GET) and requests (POST) on a single endpoint.
+  - `GET/POST /sse` – Legacy SSE endpoint (for backward compatibility).
+  - `POST /messages` – Legacy message endpoint (for backward compatibility).
   - `GET /healthz` – Lightweight readiness probe that reports tool name and transport type.
 - **Running locally**
   ```bash
