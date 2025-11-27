@@ -113,13 +113,17 @@ function registerListToolsHandler(server: Server) {
       {
         name: "analyze_file",
         description:
-          "Analyze a single file for security vulnerabilities in NextJS/React TypeScript code",
+          "Analyze a single file for security vulnerabilities in NextJS/React TypeScript code. For remote MCP servers, provide 'file_content' to send file content directly.",
         inputSchema: {
           type: "object",
           properties: {
             file_path: {
               type: "string",
-              description: "Path to the file to analyze",
+              description: "Path to the file to analyze (used for reporting and local file access)",
+            },
+            file_content: {
+              type: "string",
+              description: "Optional: File content as string. Use this when using a remote MCP server to send file content directly instead of reading from filesystem.",
             },
           },
           required: ["file_path"],
@@ -128,13 +132,31 @@ function registerListToolsHandler(server: Server) {
       {
         name: "analyze_directory",
         description:
-          "Recursively analyze all TypeScript/JavaScript files in a directory for security issues",
+          "Recursively analyze all TypeScript/JavaScript files in a directory for security issues. For remote MCP servers, provide 'files' array to send file contents directly.",
         inputSchema: {
           type: "object",
           properties: {
             directory_path: {
               type: "string",
-              description: "Path to the directory to analyze",
+              description: "Path to the directory to analyze (used for reporting and local directory access)",
+            },
+            files: {
+              type: "array",
+              description: "Optional: Array of files with path and content. Use this when using a remote MCP server. Format: [{path: string, content: string}, ...]",
+              items: {
+                type: "object",
+                properties: {
+                  path: {
+                    type: "string",
+                    description: "File path (relative to directory_path or absolute)",
+                  },
+                  content: {
+                    type: "string",
+                    description: "File content as string",
+                  },
+                },
+                required: ["path", "content"],
+              },
             },
           },
           required: ["directory_path"],
@@ -161,15 +183,24 @@ function registerCallToolHandler(server: Server, analyzer: SecurityAnalyzer) {
 
     try {
       if (name === "analyze_file") {
-        const filePath = (args as { file_path: string }).file_path;
-        const result = await analyzer.analyzeFile(filePath);
+        const fileArgs = args as { file_path: string; file_content?: string };
+        const filePath = fileArgs.file_path;
+        const fileContent = fileArgs.file_content;
+        
+        const result = await analyzer.analyzeFile(filePath, fileContent);
         const projectRoot = await resolveProjectRoot(filePath);
         return buildAnalysisResponse([result], projectRoot);
       }
 
       if (name === "analyze_directory") {
-        const dirPath = (args as { directory_path: string }).directory_path;
-        const results = await analyzer.analyzeDirectory(dirPath);
+        const dirArgs = args as {
+          directory_path: string;
+          files?: Array<{ path: string; content: string }>;
+        };
+        const dirPath = dirArgs.directory_path;
+        const files = dirArgs.files;
+        
+        const results = await analyzer.analyzeDirectory(dirPath, files);
         const projectRoot = await resolveProjectRoot(dirPath);
         return buildAnalysisResponse(results, projectRoot);
       }

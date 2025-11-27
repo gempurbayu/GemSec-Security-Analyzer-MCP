@@ -26,9 +26,11 @@ GemSec is exposed via the `gemsec` binary defined in `package.json`. After build
 
 | Tool Name | Description | Arguments |
 |-----------|-------------|-----------|
-| `analyze_file` | Scan a single file | `{ "file_path": "/abs/path/to/file.tsx" }` |
-| `analyze_directory` | Recursively scan a folder for JS/TS files | `{ "directory_path": "/abs/path/to/project" }` |
+| `analyze_file` | Scan a single file | `{ "file_path": "/abs/path/to/file.tsx", "file_content"?: "..." }` |
+| `analyze_directory` | Recursively scan a folder for JS/TS files | `{ "directory_path": "/abs/path/to/project", "files"?: [...] }` |
 | `get_security_best_practices` | Returns the curated best-practices checklist | none |
+
+**Note:** For remote MCP servers, you can provide `file_content` (for `analyze_file`) or `files` array (for `analyze_directory`) to send file contents directly instead of reading from filesystem.
 
 ### Typical Workflow
 
@@ -43,10 +45,28 @@ GemSec is exposed via the `gemsec` binary defined in `package.json`. After build
      # or: PORT=4000 node ./build/httpServer.js
      ```
 2. **Call `analyze_directory`**
+   
+   **For local server:**
    ```json
    {
      "name": "analyze_directory",
      "arguments": { "directory_path": "/Users/me/projects/test-project" }
+   }
+   ```
+   
+   **For remote server (with file contents):**
+   ```json
+   {
+     "name": "analyze_directory",
+     "arguments": {
+       "directory_path": "/Users/me/projects/test-project",
+       "files": [
+         {
+           "path": "/Users/me/projects/test-project/src/App.tsx",
+           "content": "// file content here..."
+         }
+       ]
+     }
    }
    ```
 3. **Open the HTML report**
@@ -297,6 +317,84 @@ If auto-open fails (e.g., no browser available), the report path will still be s
 - **Report path not under your repo?** Ensure the analyzed directory contains a project marker (`package.json`, `.git`, etc.). GemSec walks up the filesystem until it finds one.
 - **Missing findings?** Only `.ts`, `.tsx`, `.js`, and `.jsx` files are scanned.
 - **Custom report locations?** Pass an absolute path via `analyze_directory` or `analyze_file`; GemSec will infer the nearest project root automatically.
+
+### Remote MCP Server Support
+
+⚠️ **Important:** When using a remote MCP server (deployed in the cloud), the server **cannot access files on your local filesystem** by default. However, GemSec now supports **sending file contents directly** to the remote server!
+
+#### Option 1: Send File Content Directly (Recommended for Remote Servers)
+
+You can provide file contents directly in the tool call, allowing remote servers to analyze your local files:
+
+**For single file analysis:**
+```json
+{
+  "name": "analyze_file",
+  "arguments": {
+    "file_path": "/Users/me/project/src/App.tsx",
+    "file_content": "import React from 'react';\n\nexport default function App() {\n  return <div>Hello</div>;\n}"
+  }
+}
+```
+
+**For directory analysis:**
+```json
+{
+  "name": "analyze_directory",
+  "arguments": {
+    "directory_path": "/Users/me/project/src",
+    "files": [
+      {
+        "path": "/Users/me/project/src/App.tsx",
+        "content": "import React from 'react';\n\nexport default function App() {\n  return <div>Hello</div>;\n}"
+      },
+      {
+        "path": "/Users/me/project/src/components/Button.tsx",
+        "content": "export function Button() { return <button>Click</button>; }"
+      }
+    ]
+  }
+}
+```
+
+**How it works:**
+- The client reads files from the local filesystem
+- File contents are sent to the remote server in the tool call
+- The remote server analyzes the content without needing filesystem access
+- Results are returned with the original file paths for proper reporting
+
+#### Option 2: Use Local MCP Server (Recommended for Local Development)
+
+For local development, use StdIO transport with a local server:
+
+```json
+{
+  "mcpServers": {
+    "gemsec": {
+      "command": "node",
+      "args": ["/absolute/path/to/security-analyzer-mcp/build/index.js"]
+    }
+  }
+}
+```
+
+#### Option 3: Analyze Files on Remote Server
+
+If your files are already on the remote server's filesystem, you can use the remote server directly with file paths:
+
+```json
+{
+  "name": "analyze_directory",
+  "arguments": {
+    "directory_path": "/remote/path/to/project"
+  }
+}
+```
+
+**Best Practice:** 
+- Use **Option 1** (file content) when you want to analyze local files with a remote server
+- Use **Option 2** (local server) for local development (most efficient)
+- Use **Option 3** (remote paths) when files are already on the remote server
 
 ## License
 
