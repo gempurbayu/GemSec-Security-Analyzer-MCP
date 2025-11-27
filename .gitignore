@@ -6,6 +6,9 @@
 .pnp.js
 /package-lock.json
 
+DEPLOYMENT.md
+NGINX_SETUP.md
+
 /build
 
 # testing

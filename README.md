@@ -160,14 +160,43 @@ If you are using a web-based MCP client that supports SSE, the configuration is 
 }
 ```
 
+**For remote deployment (with authentication):**
+```json
+{
+  "mcpServers": {
+    "gemsec-remote": {
+      "type": "streamable-http",
+      "url": "https://your-server.com/mcp",
+      "headers": {
+        "Authorization": "Bearer your-secret-token"
+      }
+    }
+  }
+}
+```
+
 **For legacy SSE clients:**
 ```json
 {
   "mcpServers": {
     "gemsec-sse": {
       "url": "http://localhost:3030/sse",
+      "transport": "sse"
+    }
+  }
+}
+```
+
+**For legacy SSE with authentication:**
+```json
+{
+  "mcpServers": {
+    "gemsec-sse": {
+      "url": "http://localhost:3030/sse",
       "transport": "sse",
-      "headers" : "Bearer {your_token}"
+      "headers": {
+        "Authorization": "Bearer your-secret-token"
+      }
     }
   }
 }
@@ -236,6 +265,7 @@ The HTTP transport aligns with the Azure-ready blueprint described by Build5Nine
   - When scaling beyond a single replica (e.g., multiple Azure Container App pods), configure session affinity so `/messages` requests reach the pod that owns the `/sse` stream.
   - The included `Dockerfile` already produces a minimal Node 20 runtime suitable for ACA or other container targets.
   - For production deployments, consider enabling authentication via `GEMSEC_AUTH_TOKEN`.
+  - See [DEPLOYMENT.md](./DEPLOYMENT.md) for complete Docker deployment guide.
 
 ## Output Anatomy
 
