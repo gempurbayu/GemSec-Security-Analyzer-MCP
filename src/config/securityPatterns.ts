@@ -1,0 +1,103 @@
+import { SecurityPattern } from "../types.js";
+
+export const securityPatterns: SecurityPattern[] = [
+  {
+    name: "XSS - dangerouslySetInnerHTML",
+    pattern: /dangerouslySetInnerHTML/g,
+    severity: "high",
+    message: "Penggunaan dangerouslySetInnerHTML dapat menyebabkan XSS attacks",
+    recommendation: "Gunakan DOMPurify untuk sanitasi HTML atau hindari innerHTML",
+  },
+  {
+    name: "XSS - eval()",
+    pattern: /\beval\s*\(/g,
+    severity: "critical",
+    message: "eval() dapat mengeksekusi kode arbitrary dan sangat berbahaya",
+    recommendation: "Hindari eval(), gunakan JSON.parse() atau alternatives yang lebih aman",
+  },
+  {
+    name: "Hardcoded Secrets",
+    pattern: /(api[_-]?key|password|secret|token)\s*[:=]\s*['"][^'"]{8,}['"]/gi,
+    severity: "critical",
+    message: "API key atau secret terdeteksi hardcoded dalam kode",
+    recommendation: "Gunakan environment variables (.env) dan jangan commit secrets",
+  },
+  {
+    name: "Insecure localStorage",
+    pattern: /localStorage\.(setItem|getItem)/g,
+    severity: "medium",
+    message: "localStorage tidak aman untuk data sensitif",
+    recommendation: "Jangan simpan token atau data sensitif di localStorage, gunakan httpOnly cookies",
+  },
+  {
+    name: "Missing Input Validation",
+    pattern: /\b(req\.body|req\.query|req\.params)\.\w+(?!\s*&&|\s*\|\||\.)/g,
+    severity: "high",
+    message: "Input dari user tidak divalidasi",
+    recommendation: "Validasi semua input menggunakan library seperti zod atau joi",
+  },
+  {
+    name: "SQL Injection Risk",
+    pattern: /(`|'|").*?\$\{.*?\}.*?\1.*?(SELECT|INSERT|UPDATE|DELETE)/gi,
+    severity: "critical",
+    message: "Potensi SQL injection dengan string interpolation",
+    recommendation: "Gunakan parameterized queries atau ORM seperti Prisma",
+  },
+  {
+    name: "Insecure Random",
+    pattern: /Math\.random\(\)/g,
+    severity: "medium",
+    message: "Math.random() tidak cryptographically secure",
+    recommendation: "Gunakan crypto.randomBytes() atau crypto.getRandomValues() untuk keamanan",
+  },
+  {
+    name: "CORS Misconfiguration",
+    pattern: /cors\(\s*\{\s*origin\s*:\s*['"]?\*['"]?\s*\}\s*\)/g,
+    severity: "high",
+    message: "CORS dikonfigurasi untuk menerima semua origin (*)",
+    recommendation: "Batasi CORS hanya untuk domain yang dipercaya",
+  },
+  {
+    name: "Insecure HTTP",
+    pattern: /['"]http:\/\//g,
+    severity: "medium",
+    message: "Menggunakan HTTP tanpa enkripsi",
+    recommendation: "Gunakan HTTPS untuk semua komunikasi",
+  },
+  {
+    name: "Weak Crypto",
+    pattern: /\b(md5|sha1)\b/gi,
+    severity: "high",
+    message: "Algoritma hashing yang lemah (MD5/SHA1)",
+    recommendation: "Gunakan bcrypt, scrypt, atau Argon2 untuk password hashing",
+  },
+  {
+    name: "Unsafe Redirect",
+    pattern: /window\.location\s*=\s*\w+|router\.(push|replace)\(\s*\w+\s*\)/g,
+    severity: "medium",
+    message: "Open redirect vulnerability - redirect tanpa validasi",
+    recommendation: "Validasi URL redirect terhadap whitelist domain",
+  },
+  {
+    name: "Missing CSRF Protection",
+    pattern: /<form(?![^>]*csrf)/gi,
+    severity: "high",
+    message: "Form tanpa CSRF protection",
+    recommendation: "Implementasi CSRF tokens untuk semua form mutations",
+  },
+  {
+    name: "Exposed Server Info",
+    pattern: /x-powered-by/gi,
+    severity: "low",
+    message: "Header X-Powered-By dapat expose informasi server",
+    recommendation: "Disable X-Powered-By header untuk menghindari information disclosure",
+  },
+  {
+    name: "Missing Security Headers",
+    pattern: /(Content-Security-Policy|X-Frame-Options|Strict-Transport-Security)/gi,
+    severity: "medium",
+    message: "Security headers penting mungkin tidak dikonfigurasi",
+    recommendation: "Implementasi CSP, X-Frame-Options, dan HSTS headers",
+  },
+];
+

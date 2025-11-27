@@ -1,0 +1,26 @@
+{
+  "name": "security-analyzer-mcp",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "prepare": "npm run build",
+    "dev": "tsc --watch"
+  },
+  "bin": {
+    "security-analyzer": "./build/index.js"
+  },
+  "keywords": ["mcp", "security", "nextjs", "react"],
+  "author": "Gempur Bayu Aji",
+  "license": "MIT",
+  "description": "",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}
