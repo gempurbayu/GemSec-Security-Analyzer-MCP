@@ -1,5 +1,5 @@
 {
-  "name": "security-analyzer-mcp",
+  "name": "gemsec-mcp",
   "version": "1.0.0",
   "main": "index.js",
   "type": "module",
@@ -10,7 +10,7 @@
     "dev": "tsc --watch"
   },
   "bin": {
-    "security-analyzer": "./build/index.js"
+    "gemsec": "./build/index.js"
   },
   "keywords": ["mcp", "security", "nextjs", "react"],
   "author": "Gempur Bayu Aji",

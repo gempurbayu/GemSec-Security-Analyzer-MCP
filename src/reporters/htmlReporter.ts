@@ -2,6 +2,8 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { AnalysisResult, SecurityIssue } from "../types.js";
 
+const PRODUCT_NAME = "GemSec";
+
 interface HtmlReportOptions {
   outputRoot?: string;
 }
@@ -138,14 +140,14 @@ function buildHtmlDocument(
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Security Analysis Report</title>
+    <title>${PRODUCT_NAME} Security Report</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <header class="hero">
       <div>
-        <p class="eyebrow">Security Analyzer MCP</p>
-        <h1>Security Code Analysis Report</h1>
+        <p class="eyebrow">${PRODUCT_NAME} MCP</p>
+        <h1>${PRODUCT_NAME} Code Analysis Report</h1>
         <p class="subtitle">Generated at ${escapeHtml(generatedAt)}</p>
       </div>
       <div class="summary-grid">

@@ -13,8 +13,9 @@ import { formatTextReport } from "./reporters/textReporter.js";
 import { generateHtmlReport } from "./reporters/htmlReporter.js";
 import { AnalysisResult } from "./types.js";
 
+const TOOL_NAME = "GemSec";
 const BEST_PRACTICES = `
-🔒 SECURITY BEST PRACTICES - NextJS/React Applications
+🔒 ${TOOL_NAME.toUpperCase()} SECURITY BEST PRACTICES - NextJS/React Applications
 
 1. 🛡️ INPUT VALIDATION & SANITIZATION
    - Validasi semua user input menggunakan zod, yup, atau joi
@@ -77,10 +78,10 @@ const BEST_PRACTICES = `
     - Proper environment variables handling
 `;
 
-export function createSecurityAnalyzerServer(): Server {
+export function createGemSecServer(): Server {
   const server = new Server(
     {
-      name: "security-analyzer",
+      name: "gemsec",
       version: "1.0.0",
     },
     {
@@ -214,10 +215,10 @@ async function buildAnalysisResponse(results: AnalysisResult[], outputRoot?: str
 }
 
 async function main() {
-  const server = createSecurityAnalyzerServer();
+  const server = createGemSecServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Security Analyzer MCP Server running on stdio");
+  console.error(`${TOOL_NAME} MCP Server running on stdio`);
 }
 
 main().catch((error) => {
