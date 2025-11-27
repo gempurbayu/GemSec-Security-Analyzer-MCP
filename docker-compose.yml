@@ -1,0 +1,12 @@
+version: "3.9"
+
+services:
+  gemsec:
+    build: .
+    image: gemsec-mcp:latest
+    command: >
+      sh -c "mcp-remote http://0.0.0.0:7070/gemsec-security.analyzer --command node --args /app/build/index.js"
+    ports:
+      - "7070:7070"
+    restart: unless-stopped
+
