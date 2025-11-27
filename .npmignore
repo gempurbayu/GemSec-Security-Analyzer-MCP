@@ -1,0 +1,49 @@
+# Source files (only build/ is needed)
+src/
+tsconfig.json
+
+# Development files
+.git/
+.gitignore
+.github/
+
+# Documentation (keep README.md, exclude others)
+DEPLOYMENT.md
+NGINX_SETUP.md
+SSE_SETUP.md
+TROUBLESHOOTING.md
+
+# Docker files
+Dockerfile
+docker-compose.yml
+nginx.conf
+nginx.conf.example
+setup-ssl.sh
+
+# Config examples
+mcp.json.example
+
+# Development scripts
+scripts/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# Test
+coverage/
+*.test.js
+*.spec.js
+

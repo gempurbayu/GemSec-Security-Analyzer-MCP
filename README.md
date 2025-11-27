@@ -2,6 +2,26 @@
 
 GemSec is a Model Context Protocol (MCP) tool that scans JavaScript/TypeScript codebases (Next.js/React friendly) for common security pitfalls, then produces actionable CLI and HTML reports with contextual snippets, debugging prompts, and deep links.
 
+## 🚀 Quick Start
+
+```bash
+# Install globally (one command, no setup needed!)
+npm install -g gemsec-mcp
+```
+
+Then configure in Cursor (Settings → Features → MCP Servers):
+```json
+{
+  "mcpServers": {
+    "gemsec": {
+      "command": "gemsec-mcp"
+    }
+  }
+}
+```
+
+That's it! No cloning, no building, no manual setup. Just install and use.
+
 ## Key Features
 
 - **Recursive Analysis** – Scan an individual file or an entire directory (skipping `node_modules`, dot folders, and non JS/TS extensions).
@@ -13,6 +33,30 @@ GemSec is a Model Context Protocol (MCP) tool that scans JavaScript/TypeScript c
 
 ## Installation
 
+### Quick Install (Recommended)
+
+Install globally via npm:
+
+```bash
+npm install -g gemsec-mcp
+```
+
+After installation, the `gemsec-mcp` command will be available globally. You can use it directly in your MCP client configuration.
+
+### Local Installation
+
+For local development or if you prefer not to install globally:
+
+```bash
+npm install gemsec-mcp
+```
+
+Then use the binary from `node_modules/.bin/gemsec-mcp` or reference it in your configuration.
+
+### Development Setup
+
+If you want to contribute or modify the code:
+
 ```bash
 git clone https://github.com/your-org/gemsec-mcp.git
 cd gemsec-mcp
@@ -20,7 +64,7 @@ npm install
 npm run build
 ```
 
-GemSec is exposed via the `gemsec` binary defined in `package.json`. After building, tools can call `./build/index.js` directly (it exports the MCP server).
+GemSec is exposed via the `gemsec-mcp` binary. After installation, you can use it directly in your MCP client configuration.
 
 ## Available MCP Tools
 
@@ -77,24 +121,63 @@ GemSec is exposed via the `gemsec` binary defined in `package.json`. After build
 
 GemSec is an MCP server, so any MCP-aware IDE (such as Cursor) can invoke it directly.
 
-### Setup with StdIO (Recommended for Cursor)
+### Quick Setup (After npm install)
+
+If you've installed `gemsec-mcp` globally via npm:
+
+```json
+{
+  "mcpServers": {
+    "gemsec": {
+      "command": "gemsec-mcp"
+    }
+  }
+}
+```
+
+That's it! No need to specify paths or run any services manually.
+
+### Setup with StdIO (Manual/Development)
 
 1. **Register the server in Cursor**
    - Open `Settings → Features → MCP Servers`.
    - Add a new custom server with the following configuration:
+     
+     **If installed globally:**
+     ```json
+     {
+       "mcpServers": {
+         "gemsec": {
+           "command": "gemsec-mcp"
+         }
+       }
+     }
+     ```
+     
+     **If installed locally:**
+     ```json
+     {
+       "mcpServers": {
+         "gemsec": {
+           "command": "npx",
+           "args": ["gemsec-mcp"]
+         }
+       }
+     }
+     ```
+     
+     **Or with full path (if needed):**
      ```json
      {
        "mcpServers": {
          "gemsec": {
            "command": "node",
-           "args": ["/absolute/path/to/security-analyzer-mcp/build/index.js"]
+           "args": ["/absolute/path/to/node_modules/gemsec-mcp/build/index.js"]
          }
        }
      }
      ```
    - **Name:** `gemsec`
-   - **Command:** `node`
-   - **Args:** `["/absolute/path/to/security-analyzer-mcp/build/index.js"]`
    - Save; restart Cursor if prompted.
 
 2. **Prompting the assistant**
@@ -395,6 +478,52 @@ If your files are already on the remote server's filesystem, you can use the rem
 - Use **Option 1** (file content) when you want to analyze local files with a remote server
 - Use **Option 2** (local server) for local development (most efficient)
 - Use **Option 3** (remote paths) when files are already on the remote server
+
+#### Using `mcp-remote` with GemSec
+
+If you're using `npx mcp-remote` to connect to a remote GemSec server (like in the PostHog example), here's what you need to know:
+
+**Configuration example:**
+```json
+{
+  "mcpServers": {
+    "gemsec-remote": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote@latest",
+        "https://your-gemsec-server.com/sse",
+        "--header",
+        "Authorization:Bearer your-token"
+      ],
+      "env": {
+        "GEMSEC_AUTH_TOKEN": "your-token"
+      }
+    }
+  }
+}
+```
+
+**How it works:**
+1. `mcp-remote` acts as a proxy between your local client and the remote GemSec server
+2. When you call `analyze_file` or `analyze_directory`, the AI assistant (Cursor) should read the local files and include their content in the tool call
+3. The remote server receives the file contents and can analyze them without needing filesystem access
+
+**Important Notes:**
+- ✅ **Works with smart AI assistants**: If your AI assistant (like Cursor) can read local files and include `file_content`/`files` in tool calls, this will work seamlessly
+- ⚠️ **Manual file reading**: If the AI doesn't automatically read files, you may need to explicitly provide file contents
+- 💡 **Recommendation**: For local development, use a local StdIO server instead. Use `mcp-remote` when you want to leverage cloud resources or when analyzing files that are already on the remote server
+
+**Example tool call that works with mcp-remote:**
+```json
+{
+  "name": "analyze_file",
+  "arguments": {
+    "file_path": "/Users/me/project/src/App.tsx",
+    "file_content": "// AI assistant reads this from local file and includes it"
+  }
+}
+```
 
 ## License
 
