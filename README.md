@@ -4,20 +4,15 @@ GemSec is a Model Context Protocol (MCP) tool that scans JavaScript/TypeScript c
 
 ## 🚀 Quick Start
 
-```bash
-# Install globally (one command, no setup needed!)
-npm install -g gemsec-security-analyzer-mcp
-```
-
-Then configure in Cursor (Settings → Features → MCP Servers):
+Configure in Cursor (Settings → Features → MCP Servers):
 ```json
-{
-  "mcpServers": {
-    "gemsec": {
-      "command": "gemsec-mcp"
-    }
-  }
-}
+"gemsec-local": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "gemsec-security-analyzer-mcp@latest"
+      ]
+    },
 ```
 
 That's it! No cloning, no building, no manual setup. Just install and use.
@@ -30,28 +25,6 @@ That's it! No cloning, no building, no manual setup. Just install and use.
   - Terminal output with severity badges, code snippets, VS Code deep links, and suggested prompts for debugging.
   - Styled HTML report (`reports/security-report-*/index.html`) generated inside the root of the analyzed project.
 - **Best Practices Helper** – Quick reference guide for hardened Next.js/React deployments.
-
-## Installation
-
-### Quick Install (Recommended)
-
-Install globally via npm:
-
-```bash
-npm install -g gemsec-mcp
-```
-
-After installation, the `gemsec-mcp` command will be available globally. You can use it directly in your MCP client configuration.
-
-### Local Installation
-
-For local development or if you prefer not to install globally:
-
-```bash
-npm install gemsec-mcp
-```
-
-Then use the binary from `node_modules/.bin/gemsec-mcp` or reference it in your configuration.
 
 ### Development Setup
 
@@ -120,22 +93,6 @@ GemSec is exposed via the `gemsec-mcp` binary. After installation, you can use i
 ## IDE / Cursor Integration
 
 GemSec is an MCP server, so any MCP-aware IDE (such as Cursor) can invoke it directly.
-
-### Quick Setup (After npm install)
-
-If you've installed `gemsec-mcp` globally via npm:
-
-```json
-{
-  "mcpServers": {
-    "gemsec": {
-      "command": "gemsec-mcp"
-    }
-  }
-}
-```
-
-That's it! No need to specify paths or run any services manually.
 
 ### Setup with StdIO (Manual/Development)
 
