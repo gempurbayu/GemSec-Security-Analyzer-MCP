@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Released]
 
-## [Unreleased]
+## [1.2.1] - 2025-01-28
 
 ### Changed
 - Updated repository URL in package.json to point to the correct GitHub repository
