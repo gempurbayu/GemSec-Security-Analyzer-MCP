@@ -6,7 +6,7 @@ GemSec is a Model Context Protocol (MCP) tool that scans JavaScript/TypeScript c
 
 ```bash
 # Install globally (one command, no setup needed!)
-npm install -g gemsec-mcp
+npm install -g gemsec-security-analyzer-mcp
 ```
 
 Then configure in Cursor (Settings → Features → MCP Servers):
