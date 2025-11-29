@@ -26,6 +26,124 @@ That's it! No cloning, no building, no manual setup. Just install and use.
   - Styled HTML report (`reports/security-report-*/index.html`) generated inside the root of the analyzed project.
 - **Best Practices Helper** – Quick reference guide for hardened Next.js/React deployments.
 
+## Security Patterns
+
+GemSec scans for 14 common security vulnerabilities in JavaScript/TypeScript codebases. Each pattern is detected using regex-based matching and includes severity classification, detailed explanations, and actionable recommendations.
+
+### Pattern Overview
+
+| Pattern Name | Severity | Description |
+|--------------|----------|-------------|
+| **XSS - eval()** | 🔴 Critical | Detects use of `eval()` which can execute arbitrary code |
+| **Hardcoded Secrets** | 🔴 Critical | Finds API keys, passwords, secrets, or tokens hardcoded in source code |
+| **SQL Injection Risk** | 🔴 Critical | Identifies SQL queries with string interpolation vulnerabilities |
+| **XSS - dangerouslySetInnerHTML** | 🟠 High | Detects unsafe HTML injection in React components |
+| **Missing Input Validation** | 🟠 High | Flags unvalidated user input from request parameters |
+| **CORS Misconfiguration** | 🟠 High | Finds CORS configured to accept all origins (`*`) |
+| **Missing CSRF Protection** | 🟠 High | Detects forms without CSRF token protection |
+| **Weak Crypto** | 🟠 High | Identifies use of weak hashing algorithms (MD5/SHA1) |
+| **Insecure localStorage** | 🟡 Medium | Flags use of localStorage for sensitive data storage |
+| **Insecure Random** | 🟡 Medium | Detects use of `Math.random()` for security-sensitive operations |
+| **Insecure HTTP** | 🟡 Medium | Finds HTTP URLs (should use HTTPS) |
+| **Missing Security Headers** | 🟡 Medium | Checks for missing CSP, X-Frame-Options, or HSTS headers |
+| **Unsafe Redirect** | 🟡 Medium | Detects redirects without URL validation |
+| **Exposed Server Info** | 🔵 Low | Finds X-Powered-By headers that expose server technology |
+
+### Detailed Pattern Descriptions
+
+#### 🔴 Critical Severity
+
+**XSS - eval()**
+- **Issue**: `eval()` executes strings as JavaScript code, allowing arbitrary code execution
+- **Risk**: Remote code execution in browser or server if input comes from untrusted sources
+- **Recommendation**: Avoid `eval()`, use `JSON.parse()` or safer alternatives
+
+**Hardcoded Secrets**
+- **Issue**: API keys, passwords, secrets, or tokens hardcoded in source code
+- **Risk**: Secrets exposed in repositories, build artifacts, or shared code can be used by attackers to access APIs, databases, or services
+- **Recommendation**: Use environment variables (`.env`) and never commit secrets to version control
+
+**SQL Injection Risk**
+- **Issue**: SQL queries constructed with string interpolation instead of parameterized queries
+- **Risk**: Attackers can inject SQL code to read sensitive data, modify data, or gain remote code execution on the database server
+- **Recommendation**: Use parameterized queries or ORM like Prisma
+
+#### 🟠 High Severity
+
+**XSS - dangerouslySetInnerHTML**
+- **Issue**: React's `dangerouslySetInnerHTML` allows direct HTML injection into DOM without sanitization
+- **Risk**: If content comes from user input or untrusted sources, attackers can inject malicious scripts leading to cookie theft, session hijacking, or defacement
+- **Recommendation**: Use DOMPurify for HTML sanitization or avoid innerHTML entirely
+
+**Missing Input Validation**
+- **Issue**: User input from `req.body`, `req.query`, or `req.params` used without validation
+- **Risk**: Can lead to injection attacks (SQL, NoSQL, Command), type confusion, buffer overflow, or business logic bypass
+- **Recommendation**: Validate all input using libraries like `zod` or `joi`
+
+**CORS Misconfiguration**
+- **Issue**: CORS configured to accept all origins (`*`)
+- **Risk**: Any website can make authenticated requests to your API, enabling CSRF attacks or unauthorized data access
+- **Recommendation**: Restrict CORS to trusted domains only
+
+**Missing CSRF Protection**
+- **Issue**: Forms without CSRF token protection
+- **Risk**: Attackers can make requests on behalf of authenticated users, performing actions like changing passwords or deleting data without user knowledge
+- **Recommendation**: Implement CSRF tokens for all form mutations
+
+**Weak Crypto**
+- **Issue**: Use of weak hashing algorithms (MD5/SHA1)
+- **Risk**: Vulnerable to collision attacks and too fast for password hashing; attackers can use rainbow tables or brute force
+- **Recommendation**: Use bcrypt, scrypt, or Argon2 for password hashing
+
+#### 🟡 Medium Severity
+
+**Insecure localStorage**
+- **Issue**: Use of `localStorage` for storing sensitive data
+- **Risk**: Accessible by JavaScript in same origin (including XSS attacks); no httpOnly protection; tokens can be stolen if XSS occurs
+- **Recommendation**: Do not store tokens or sensitive data in localStorage; use httpOnly cookies instead
+
+**Insecure Random**
+- **Issue**: Use of `Math.random()` for security-sensitive operations
+- **Risk**: Pseudo-random number generator is predictable; attackers can guess or predict generated values for tokens, session IDs, or cryptographic keys
+- **Recommendation**: Use `crypto.randomBytes()` or `crypto.getRandomValues()` for security
+
+**Insecure HTTP**
+- **Issue**: HTTP URLs used instead of HTTPS
+- **Risk**: Data sent in plain text; attackers on same network can intercept, read, and modify communications including credentials and tokens
+- **Recommendation**: Use HTTPS for all communications
+
+**Missing Security Headers**
+- **Issue**: Important security headers (CSP, X-Frame-Options, HSTS) may not be configured
+- **Risk**: More vulnerable to XSS, clickjacking, and man-in-the-middle attacks
+- **Recommendation**: Implement CSP, X-Frame-Options, and HSTS headers
+
+**Unsafe Redirect**
+- **Issue**: Redirects without URL validation
+- **Risk**: Attackers can redirect users to malicious websites for phishing or to bypass security controls
+- **Recommendation**: Validate redirect URLs against a whitelist of domains
+
+#### 🔵 Low Severity
+
+**Exposed Server Info**
+- **Issue**: X-Powered-By header exposes server technology information
+- **Risk**: Helps attackers find technology-specific vulnerabilities during reconnaissance
+- **Recommendation**: Disable X-Powered-By header to minimize information disclosure
+
+### Extending Security Patterns
+
+To add new security patterns, edit `src/config/securityPatterns.ts`:
+
+```typescript
+{
+  name: "Your Pattern Name",
+  pattern: /your-regex-pattern/g,
+  severity: "high" | "medium" | "low" | "critical",
+  message: "Brief description of the issue",
+  recommendation: "Actionable fix suggestion",
+  explanation: "Detailed explanation of the vulnerability and its risks"
+}
+```
+
 ## Available MCP Tools
 
 | Tool Name | Description | Arguments |

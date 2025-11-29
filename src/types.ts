@@ -29,5 +29,6 @@ export interface SecurityPattern {
   severity: Severity;
   message: string;
   recommendation: string;
+  explanation?: string;
 }
 

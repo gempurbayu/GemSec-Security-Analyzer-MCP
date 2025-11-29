@@ -5,11 +5,15 @@
 /.pnp
 .pnp.js
 # /package-lock.json  # Keep package-lock.json for reproducible builds
+.npmrc
+docker-compose.yml
+Dockerfile
 
 DEPLOYMENT.md
 NGINX_SETUP.md
 setup-ssl.sh
 TROUBLESHOOTING.md
+SSE_SETUP.md
 
 nginx.conf
 
